@@ -22,6 +22,7 @@ type Item = {
   rev: number;
   status: "working" | "done" | "error";
   error?: string;
+  focus?: { x: number; y: number };
   results: Record<string, Result>;
 };
 
@@ -92,7 +93,14 @@ export default function SizeKit() {
     void drain();
   }
 
-  function runJob(itemId: string, file: File, rev: number, presets: Preset[], config: Settings) {
+  function runJob(
+    itemId: string,
+    file: File,
+    rev: number,
+    presets: Preset[],
+    config: Settings,
+    focus?: { x: number; y: number }
+  ) {
     return new Promise<void>((resolve) => {
       // The item may have been removed or restarted while this task waited in the queue.
       if (!itemsRef.current.some((item) => item.id === itemId && item.rev === rev)) {
@@ -187,7 +195,7 @@ export default function SizeKit() {
           fit: config.fit,
           format: preset.format ?? config.format,
         })),
-        options: { quality: config.quality, background: config.background },
+        options: { quality: config.quality, background: config.background, focus },
       });
     });
   }
@@ -213,6 +221,21 @@ export default function SizeKit() {
     }
   }
 
+  function setFocus(id: string, focus?: { x: number; y: number }) {
+    const item = itemsRef.current.find((entry) => entry.id === id);
+    if (!item) return;
+
+    workersRef.current.get(id)?.();
+    revokeResults(item);
+
+    const rev = item.rev + 1;
+    const next: Item = { ...item, focus, rev, status: "working", results: {}, error: undefined };
+    commit(itemsRef.current.map((entry) => (entry.id === id ? next : entry)));
+
+    const presets = activePresets(settingsRef.current);
+    enqueue(() => runJob(id, item.file, rev, presets, settingsRef.current, focus));
+  }
+
   function rerunAll() {
     const prev = itemsRef.current;
     if (!prev.length) return;
@@ -225,7 +248,7 @@ export default function SizeKit() {
 
     const presets = activePresets(settingsRef.current);
     for (const item of next) {
-      enqueue(() => runJob(item.id, item.file, item.rev, presets, settingsRef.current));
+      enqueue(() => runJob(item.id, item.file, item.rev, presets, settingsRef.current, item.focus));
     }
   }
 
@@ -430,6 +453,9 @@ export default function SizeKit() {
                       ? "Finds the busiest part of the photo so faces stay in frame."
                       : "Keeps the whole photo and fills the edges with a color."}
                   </p>
+                  <p className="mt-1 text-[11px] leading-snug text-zinc-700">
+                    Cut-outs with transparency are fitted, never cropped.
+                  </p>
                 </div>
 
                 <div>
@@ -515,6 +541,7 @@ export default function SizeKit() {
                 presets={selectedPresets}
                 onDownload={downloadOne}
                 onRemove={removeItem}
+                onFocus={setFocus}
               />
             ))}
           </section>
@@ -575,12 +602,15 @@ function ItemCard({
   presets,
   onDownload,
   onRemove,
+  onFocus,
 }: {
   item: Item;
   presets: Preset[];
   onDownload: (item: Item, result: Result) => void;
   onRemove: (id: string) => void;
+  onFocus: (id: string, focus?: { x: number; y: number }) => void;
 }) {
+  const [adjusting, setAdjusting] = useState(false);
   const results = Object.values(item.results);
   const done = results.length >= presets.length;
 
@@ -596,13 +626,20 @@ function ItemCard({
             {formatBytes(item.file.size)} in · {results.length}/{presets.length} out
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setAdjusting((value) => !value)}
+          className={`rounded-md border px-2 py-1 font-mono text-[10px] transition ${
+            adjusting || item.focus
+              ? "border-acid/40 text-acid"
+              : "border-line text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
+          }`}
+        >
+          {item.focus ? "focused" : "crop"}
+        </button>
         <span
           className={`font-mono text-[10px] ${
-            item.status === "error"
-              ? "text-red-400"
-              : done
-                ? "text-acid"
-                : "text-zinc-500"
+            item.status === "error" ? "text-red-400" : done ? "text-acid" : "text-zinc-500"
           }`}
         >
           {item.status === "error" ? "failed" : done ? "ready" : "rendering"}
@@ -616,6 +653,45 @@ function ItemCard({
           <CloseIcon />
         </button>
       </div>
+
+      {adjusting && (
+        <div className="border-b border-line p-2.5">
+          <div className="relative overflow-hidden rounded-lg border border-line">
+            <img
+              src={item.thumb}
+              alt="Pick a focal point"
+              draggable={false}
+              onClick={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                onFocus(item.id, {
+                  x: (event.clientX - rect.left) / rect.width,
+                  y: (event.clientY - rect.top) / rect.height,
+                });
+              }}
+              className="block w-full cursor-crosshair select-none"
+            />
+            {item.focus && (
+              <span
+                className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-acid bg-ink/50 shadow-[0_0_0_6px_rgba(216,255,62,0.15)]"
+                style={{ left: `${item.focus.x * 100}%`, top: `${item.focus.y * 100}%` }}
+              />
+            )}
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <p className="font-mono text-[10px] text-zinc-600">
+              click where the subject is — every size re-crops around it
+            </p>
+            <button
+              type="button"
+              onClick={() => onFocus(item.id)}
+              disabled={!item.focus}
+              className="shrink-0 font-mono text-[10px] text-zinc-500 transition hover:text-acid disabled:text-zinc-700"
+            >
+              auto
+            </button>
+          </div>
+        </div>
+      )}
 
       {item.error ? (
         <p className="px-3 py-4 text-[12px] text-red-300/90">{item.error} — try a JPG or PNG.</p>

@@ -17,9 +17,12 @@ Everything runs in the browser tab. No upload, no account, no backend, no teleme
 ## How it works
 
 1. `createImageBitmap` decodes once per image, capped at 2600px on the long edge.
-2. A 96px proxy is analysed for visual energy; the busiest window for each preset's aspect ratio becomes the crop.
-3. Each preset is drawn to its own `OffscreenCanvas` and encoded with `convertToBlob` in small batches, so tiles stream in as they finish.
-4. Results are cached as blobs, so a single download is instant and "Download all" only zips bytes that already exist.
+2. A 160px proxy is turned into an **attention map** from four signals: fine edges, coarse edges (blurred then Sobel, so a face outline counts more than skin texture), saturation, and skin probability (YCbCr + RGB rules). If the image has real transparency, alpha becomes the subject mask instead.
+3. Every candidate crop is scored by summed attention × a center prior, **minus a penalty for energy on the window border** — so a window that slices a face scores worse than one that contains it. A coarse grid is then refined with three shrinking neighbourhood passes. The best window maps back to full resolution.
+4. Presets render in batches of four `OffscreenCanvas` draws; big reductions are halved repeatedly before the final draw.
+5. Results are cached as blobs, so a single download is instant and "Download all" only zips bytes that already exist.
+
+Click **crop** on any image to drop a focal point manually — every size re-crops around it, nothing else changes.
 
 ## Scripts
 
