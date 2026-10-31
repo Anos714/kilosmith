@@ -3,9 +3,11 @@ export const site = {
   domain: "https://sizekit.vercel.app",
   tagline: "Every size. Every format. Nothing uploaded.",
   description:
-    "sizekit is a free browser toolkit for images and video: resize to 18 social and app presets, compress, convert between PNG, WebP, AVIF and JPEG, make GIFs and memes, generate favicons, and shrink video — all locally, with no upload and no account.",
+    "sizekit is a free browser toolkit for images and video: resize, crop and rotate, compress, convert between PNG, WebP, AVIF and JPEG, make GIFs and memes, generate favicons, and shrink video — all locally, with no upload and no account.",
   keywords: [
     "image resizer",
+    "crop image online",
+    "rotate image",
     "compress image online",
     "convert png to webp",
     "png to avif",
@@ -38,6 +40,12 @@ export const tools = [
     name: "Resize",
     blurb: "One photo into 18 social, OG and icon sizes with smart crops.",
     icon: "resize",
+  },
+  {
+    id: "crop",
+    name: "Crop",
+    blurb: "Rotate, flip, straighten and crop with aspect presets — then export.",
+    icon: "crop",
   },
   {
     id: "compress",

@@ -28,7 +28,8 @@ export function SiteFooter() {
               <span className="font-mono text-[13px] text-zinc-100">{site.name}</span>
             </Link>
             <p className="mt-3 max-w-xs text-[12px] leading-relaxed text-zinc-500">
-              {site.tagline} Seven tools for images and video that run entirely in your browser.
+              {site.tagline} {tools.length} tools for images and video that run entirely in your
+              browser.
             </p>
             <div className="mt-4 flex items-center gap-2">
               <a

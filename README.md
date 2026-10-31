@@ -1,8 +1,8 @@
 # sizekit
 
-Seven browser tools for images and video. Resize one photo into 18 social and app presets,
-compress to a target size, convert between JPEG, PNG, WebP and AVIF, shrink video with WebCodecs,
-build a looping GIF, make a meme, and generate a complete favicon kit.
+Eight browser tools for images and video. Crop, rotate and straighten a photo, resize it into 18
+social and app presets, compress to a target size, convert between JPEG, PNG, WebP and AVIF, shrink
+video with WebCodecs, build a looping GIF, make a meme, and generate a complete favicon kit.
 
 Everything runs in the tab. No upload, no account, no backend, no telemetry.
 
@@ -11,6 +11,7 @@ Everything runs in the tab. No upload, no account, no backend, no telemetry.
 | Tool | What it does |
 | --- | --- |
 | **Resize** | 18 presets across Instagram, X, LinkedIn, YouTube, Pinterest, OG cards and app icons. Saliency crop, manual focal point, ZIP download. |
+| **Crop** | Rotate 90°, flip, straighten ±15°, free or preset aspects (1:1, 4:5, 9:16, 16:9, 3:2), draggable box with rule-of-thirds guides, lossless preview, export to any supported format. |
 | **Compress** | Quality slider, max edge, optional target size in KB (binary-searched encoder quality), live before/after. |
 | **Convert** | Batch JPEG / PNG / WebP / AVIF. Alpha preserved where the format supports it; JPEG and AVIF composite on white. |
 | **Video** | MP4/MOV re-encode with WebCodecs: quality → bitrate, resolution cap, audio on/off, live progress, MP4 out. |
@@ -30,6 +31,13 @@ Everything runs in the tab. No upload, no account, no backend, no telemetry.
 - GIF: **gifenc** (quantise + apply palette + LZW)
 - Meme templates: 100 WebP images in `public/memes` (built once by `scripts/fetch_memes.py`)
 - Packaging: **fflate** in store mode — images are already compressed, so deflating them only wastes seconds
+
+## How the crop tool works
+
+Rotations, flips and straightening are rasterised once into a canvas in "rotated space"; the crop box
+is stored in that space as normalised coordinates. Export is therefore one `drawImage`, with no
+transform maths to drift out of sync with the preview. Quarter turns, flips and aspect changes reset
+the box to the largest centred crop for the new frame; straightening keeps it.
 
 ## How the resize crop works
 

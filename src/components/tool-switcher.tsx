@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { TOOL_ICONS } from "@/components/icons";
 import { tools, type ToolId } from "@/lib/site";
 import ResizeTool from "@/components/tools/resize";
+import CropTool from "@/components/tools/crop";
 import CompressTool from "@/components/tools/compress";
 import ConvertTool from "@/components/tools/convert";
 import GifTool from "@/components/tools/gif";
@@ -23,6 +24,7 @@ const VideoTool = dynamic(() => import("@/components/tools/video"), {
 
 const MAP: Record<ToolId, React.ComponentType> = {
   resize: ResizeTool,
+  crop: CropTool,
   compress: CompressTool,
   convert: ConvertTool,
   video: VideoTool,

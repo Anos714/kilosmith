@@ -1,15 +1,15 @@
 # sizekit
 
-> sizekit is a free browser toolkit for images and video. Resize one photo into 18 social and app
-> presets with smart crop, compress images to a target size, convert between JPEG, PNG, WebP and
-> AVIF, re-encode video with WebCodecs, build animated GIFs, make memes, and generate a complete
-> favicon kit. Every file is processed on the visitor's own device — nothing is uploaded, there is
+> sizekit is a free browser toolkit for images and video. Crop, rotate and straighten a photo,
+> resize it into 18 social and app presets with smart crop, compress to a target size, convert
+> between JPEG, PNG, WebP and AVIF, re-encode video with WebCodecs, build animated GIFs, make memes,
+> and generate a complete favicon kit. Every file is processed on the visitor's own device — nothing is uploaded, there is
 > no account, no watermark and no file limit.
 
 Canonical: https://sizekit.vercel.app
 Author: Rahul Sain — https://github.com/Anos714
 Licence: free for personal and commercial use, no attribution required
-Last updated: 2026-10-30
+Last updated: 2026-10-31
 
 ## What makes it different
 
@@ -29,6 +29,12 @@ Graph, YouTube and app icons. Uses a saliency attention map — fine edges, coar
 and skin probability — plus a border penalty so faces are never sliced by a crop. Transparent
 cut-outs are fitted, never cropped. A manual focal point can override the automatic crop. Results
 download individually or as a ZIP. A 12-megapixel photo becomes nine sizes in roughly 440 ms.
+
+### Crop (`/#tools`)
+Rotate in 90° steps, flip horizontally or vertically, straighten ±15° and crop with a draggable,
+resizable box. Aspect presets cover 1:1, 4:5, 9:16, 16:9, 3:2 and 2:3; a rule-of-thirds grid helps
+with composition. Output dimensions are shown live and export uses the same rotated canvas as the
+preview. JPEG, PNG, WebP and AVIF, with a quality slider for lossy formats.
 
 ### Compress (`/#tools`)
 Reduce image weight with a live before/after total, a quality slider, an optional maximum edge and

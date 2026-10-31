@@ -2,7 +2,7 @@ export const faq = [
   {
     question: "Is sizekit really free?",
     answer:
-      "Yes. All seven tools are free, with no account, no watermark and no file limit. Every file is processed on your own device, so there is no server bill to pass on to you.",
+      "Yes. All eight tools are free, with no account, no watermark and no file limit. Every file is processed on your own device, so there is no server bill to pass on to you.",
   },
   {
     question: "Where do my files actually go?",

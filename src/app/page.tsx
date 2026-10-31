@@ -73,8 +73,8 @@ export default function Home() {
                 <span className="font-serif italic font-normal text-acid">Nothing uploaded.</span>
               </h1>
               <p className="mx-auto mt-5 max-w-xl text-[14.5px] leading-relaxed text-zinc-400">
-                Resize, compress and convert images. Shrink video, build GIFs, memes and favicons.
-                Seven tools that run in your browser and never touch a server.
+                Crop, resize, compress and convert images. Shrink video, build GIFs, memes and
+                favicons. {tools.length} tools that run in your browser and never touch a server.
               </p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
                 {["no sign-up", "no watermark", "works offline", "free forever"].map((item) => (
@@ -100,7 +100,7 @@ export default function Home() {
               Built to behave like software, not a website
             </h2>
             <span className="hidden font-mono text-[10.5px] text-zinc-600 sm:block">
-              seven tools, one rule: your file stays yours
+              {tools.length} tools, one rule: your file stays yours
             </span>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

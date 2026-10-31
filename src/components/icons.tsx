@@ -25,6 +25,15 @@ export function IconResize(props: IconProps) {
   );
 }
 
+export function IconCrop(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+      <path d="M2 6h14a2 2 0 0 1 2 2v14" />
+    </svg>
+  );
+}
+
 export function IconCompress(props: IconProps) {
   return (
     <svg {...base(props)}>
@@ -154,6 +163,7 @@ export function IconGithub(props: IconProps) {
 
 export const TOOL_ICONS = {
   resize: IconResize,
+  crop: IconCrop,
   compress: IconCompress,
   convert: IconConvert,
   video: IconVideo,
