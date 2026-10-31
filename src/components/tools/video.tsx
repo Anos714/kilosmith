@@ -22,6 +22,8 @@ export default function VideoTool() {
   const [quality, setQuality] = useState(62);
   const [maxHeight, setMaxHeight] = useState("1080");
   const [keepAudio, setKeepAudio] = useState(true);
+  const [start, setStart] = useState(0);
+  const [end, setEnd] = useState(0);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0, phase: "" });
   const [result, setResult] = useState<Result | null>(null);
@@ -46,7 +48,10 @@ export default function VideoTool() {
     setFile(picked);
     setProbe(null);
     try {
-      setProbe(await probeVideo(picked));
+      const meta = await probeVideo(picked);
+      setProbe(meta);
+      setStart(0);
+      setEnd(meta.duration);
       setAudioOk(await canEncodeAac());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not read this video");
@@ -61,7 +66,13 @@ export default function VideoTool() {
     try {
       const out = await compressVideo(
         file,
-        { quality, maxHeight: Number(maxHeight), keepAudio: keepAudio && audioOk !== false },
+        {
+          quality,
+          maxHeight: Number(maxHeight),
+          keepAudio: keepAudio && audioOk !== false,
+          start,
+          end,
+        },
         (update) =>
           setProgress({ done: update.done, total: update.total, phase: update.phase })
       );
@@ -95,6 +106,8 @@ export default function VideoTool() {
     );
   }
 
+  const clipLength = probe ? Math.max(0.1, (end || probe.duration) - start) : 0;
+  const trimmed = !!probe && (start > 0.05 || end < probe.duration - 0.05);
   const estimate = probe
     ? (() => {
         const height = Number(maxHeight) || probe.height;
@@ -103,7 +116,7 @@ export default function VideoTool() {
         const h = probe.height * scale;
         const bpp = 0.018 + (quality / 100) * 0.09;
         const bitrate = w * h * 30 * bpp;
-        return ((bitrate + (keepAudio ? 128_000 : 0)) * probe.duration) / 8;
+        return ((bitrate + (keepAudio ? 128_000 : 0)) * clipLength) / 8;
       })()
     : 0;
 
@@ -119,6 +132,71 @@ export default function VideoTool() {
           {probe ? `${probe.width}×${probe.height} · ${probe.duration.toFixed(1)}s · ` : ""}
           {formatBytes(file.size)}
         </p>
+
+        <div className="mt-4">
+          <Field
+            label="Trim"
+            right={
+              <span className="font-mono text-[10px] text-zinc-400">
+                {clipLength.toFixed(1)}s
+              </span>
+            }
+            hint={trimmed ? "Only this range is encoded." : "Drag to keep just part of the clip."}
+          >
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-2">
+                <span className="w-6 font-mono text-[9.5px] uppercase text-zinc-600">in</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={probe?.duration ?? 0}
+                  step={0.1}
+                  value={start}
+                  disabled={running || !probe}
+                  onChange={(event) =>
+                    setStart(Math.min(Number(event.target.value), Math.max(0, end - 0.2)))
+                  }
+                  className="w-full"
+                  aria-label="Trim start"
+                />
+                <span className="w-9 text-right font-mono text-[9.5px] text-zinc-500">
+                  {start.toFixed(1)}
+                </span>
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="w-6 font-mono text-[9.5px] uppercase text-zinc-600">out</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={probe?.duration ?? 0}
+                  step={0.1}
+                  value={end || probe?.duration || 0}
+                  disabled={running || !probe}
+                  onChange={(event) =>
+                    setEnd(Math.max(Number(event.target.value), start + 0.2))
+                  }
+                  className="w-full"
+                  aria-label="Trim end"
+                />
+                <span className="w-9 text-right font-mono text-[9.5px] text-zinc-500">
+                  {(end || probe?.duration || 0).toFixed(1)}
+                </span>
+              </label>
+            </div>
+          </Field>
+          {trimmed && (
+            <button
+              type="button"
+              onClick={() => {
+                setStart(0);
+                setEnd(probe?.duration ?? 0);
+              }}
+              className="mt-2 font-mono text-[10px] text-zinc-500 transition hover:text-zinc-200"
+            >
+              use the full clip
+            </button>
+          )}
+        </div>
 
         <div className="mt-4">
           <Field

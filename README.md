@@ -14,7 +14,7 @@ Everything runs in the tab. No upload, no account, no backend, no telemetry.
 | **Crop** | Rotate 90°, flip, straighten ±15°, free or preset aspects (1:1, 4:5, 9:16, 16:9, 3:2), draggable box with rule-of-thirds guides, lossless preview, export to any supported format. |
 | **Compress** | Quality slider, max edge, optional target size in KB (binary-searched encoder quality), live before/after. |
 | **Convert** | Batch JPEG / PNG / WebP / AVIF. Alpha preserved where the format supports it; JPEG and AVIF composite on white. |
-| **Video** | MP4/MOV re-encode with WebCodecs: quality → bitrate, resolution cap, audio on/off, live progress, MP4 out. |
+| **Video** | MP4/MOV re-encode with WebCodecs: trim in/out, quality → bitrate, resolution cap, audio on/off, live progress, MP4 out. |
 | **GIF** | Still sequence → looping GIF with per-frame delay, width cap and 64/128/256-colour palette. |
 | **Meme** | 100 built-in templates or your own photo, up to six draggable captions, per-caption font/case/fill/outline, auto-fit sizing, PNG/JPG export and copy to clipboard. |
 | **Favicon** | `.ico` (16/32/48), `apple-touch-icon.png`, Android PNGs, `manifest.webmanifest` and the `<head>` snippet. |
@@ -31,6 +31,14 @@ Everything runs in the tab. No upload, no account, no backend, no telemetry.
 - GIF: **gifenc** (quantise + apply palette + LZW)
 - Meme templates: 100 WebP images in `public/memes` (built once by `scripts/fetch_memes.py`)
 - Packaging: **fflate** in store mode — images are already compressed, so deflating them only wastes seconds
+
+## How video trimming works
+
+The in/out sliders are seconds, not frames. `compressVideo` finds the keyframe at or before the
+in-point (a decoder cannot start mid-GOP), feeds that GOP and drops every decoded frame outside the
+range, then stops at the first keyframe past the out-point. Encoder timestamps are shifted so the
+output starts at 0, and the AAC path slices the decoded audio buffer with the same range. A 10-second
+clip trimmed to 2–6 s comes out at 4.03 s.
 
 ## How the crop tool works
 

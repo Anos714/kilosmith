@@ -22,6 +22,9 @@ export type VideoOptions = {
   quality: number; // 1..100
   maxHeight: number; // 0 = keep original
   keepAudio: boolean;
+  /** Trim range in seconds. Omit to keep the whole clip. */
+  start?: number;
+  end?: number;
 };
 
 export type VideoProgress = {
@@ -211,7 +214,20 @@ export async function compressVideo(
   if (!visual) throw new Error("This track has no video stream");
   const codedWidth = visual.width;
   const codedHeight = visual.height;
-  const framerate = Math.min(60, Math.max(12, samples.length / Math.max(0.1, duration)));
+
+  // Trim range, clamped to the real duration with at least one frame of room.
+  const startAt = Math.max(0, Math.min(options.start ?? 0, duration - 0.1));
+  const endAt = Math.max(startAt + 0.1, Math.min(options.end ?? duration, duration));
+  const clipDuration = endAt - startAt;
+
+  const timeOf = (sample: Sample) => sample.cts / track.timescale;
+  const keptSamples = samples.filter(
+    (sample) => timeOf(sample) >= startAt - 0.5 && timeOf(sample) <= endAt + 0.5
+  );
+  const framerate = Math.min(
+    60,
+    Math.max(12, (keptSamples.length || samples.length) / Math.max(0.1, clipDuration))
+  );
 
   const scale = options.maxHeight ? Math.min(1, options.maxHeight / codedHeight) : 1;
   const width = even(codedWidth * scale);
@@ -275,19 +291,23 @@ export async function compressVideo(
   const decoder = new VideoDecoder({
     output: (frame) => {
       try {
+        const time = frame.timestamp / 1_000_000;
+        // Frames outside the trim range are decoded (the codec needs them)
+        // but never drawn or encoded.
+        if (time < startAt - 0.001 || time > endAt + 0.001) return;
         ctx.drawImage(frame, 0, 0, width, height);
         const scaled = new VideoFrame(canvas, {
-          timestamp: frame.timestamp,
+          timestamp: Math.max(0, frame.timestamp - startAt * 1_000_000),
           duration: frame.duration ?? undefined,
         });
         encoder.encode(scaled, { keyFrame: encodedFrames % 90 === 0 });
         scaled.close();
-      } finally {
-        frame.close();
         encodedFrames++;
         if (encodedFrames % 4 === 0) {
-          onProgress({ phase: "video", done: encodedFrames, total: samples.length });
+          onProgress({ phase: "video", done: encodedFrames, total: keptSamples.length });
         }
+      } finally {
+        frame.close();
       }
     },
     error: () => {
@@ -302,8 +322,21 @@ export async function compressVideo(
     description,
   });
 
-  for (const sample of samples) {
+  // Start decoding at the keyframe at or before the in-point: a decoder cannot
+  // begin mid-GOP, so the frames before the trim are decoded and then dropped.
+  let firstIndex = samples.findIndex((sample) => timeOf(sample) >= startAt);
+  if (firstIndex < 0) firstIndex = samples.length - 1;
+  while (firstIndex > 0 && !samples[firstIndex].is_sync) firstIndex--;
+
+  let reachedEnd = false;
+  for (let index = firstIndex; index < samples.length; index++) {
+    const sample = samples[index];
     if (failed) break;
+    // Stop on the first keyframe past the out-point; everything before it has
+    // already been fed, so the GOP is complete.
+    if (reachedEnd && sample.is_sync) break;
+    if (!reachedEnd && timeOf(sample) > endAt) reachedEnd = true;
+
     const chunk = new EncodedVideoChunk({
       type: sample.is_sync ? "key" : "delta",
       timestamp: (sample.cts / track.timescale) * 1_000_000,
@@ -328,11 +361,11 @@ export async function compressVideo(
     );
   }
 
-  onProgress({ phase: "video", done: samples.length, total: samples.length });
+  onProgress({ phase: "video", done: keptSamples.length, total: keptSamples.length });
 
   let note: string | undefined;
 
-  if (options.keepAudio && duration < 900) {
+  if (options.keepAudio && clipDuration < 900) {
     onProgress({ phase: "audio", done: 0, total: 1 });
     const audio = await audioTrack(file);
     if (audio && audio.numberOfChannels > 0) {
@@ -355,9 +388,11 @@ export async function compressVideo(
         const chunkFrames = 4096;
         const left = audio.getChannelData(0);
         const right = channels > 1 ? audio.getChannelData(1) : left;
+        const fromFrame = Math.min(audio.length, Math.floor(startAt * audio.sampleRate));
+        const toFrame = Math.min(audio.length, Math.ceil(endAt * audio.sampleRate));
 
-        for (let offset = 0; offset < audio.length; offset += chunkFrames) {
-          const frames = Math.min(chunkFrames, audio.length - offset);
+        for (let offset = fromFrame; offset < toFrame; offset += chunkFrames) {
+          const frames = Math.min(chunkFrames, toFrame - offset);
           const planar = new Float32Array(frames * channels);
           planar.set(left.subarray(offset, offset + frames), 0);
           if (channels > 1) planar.set(right.subarray(offset, offset + frames), frames);
@@ -367,7 +402,7 @@ export async function compressVideo(
             sampleRate: audio.sampleRate,
             numberOfFrames: frames,
             numberOfChannels: channels,
-            timestamp: (offset / audio.sampleRate) * 1_000_000,
+            timestamp: ((offset - fromFrame) / audio.sampleRate) * 1_000_000,
             data: planar,
           });
           audioEncoder.encode(data);

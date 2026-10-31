@@ -46,9 +46,9 @@ Batch-convert JPEG, PNG, WebP and AVIF. Alpha is preserved where the target form
 JPEG output is composited on white.
 
 ### Video (`/#tools`)
-Compress MP4 and MOV in the browser with WebCodecs. The visitor chooses quality (bitrate budget),
-resolution cap (source, 1080p, 720p, 480p) and whether to keep audio. Audio is re-encoded to AAC.
-No ffmpeg.wasm, no upload, no server.
+Compress MP4 and MOV in the browser with WebCodecs. Trim in/out points, choose quality (bitrate
+budget), cap resolution (source, 1080p, 720p, 480p) and keep or drop audio. Audio is re-encoded to
+AAC. No ffmpeg.wasm, no upload, no server.
 
 ### GIF (`/#tools`)
 Turn a sequence of stills into a looping GIF with a per-frame delay, width cap and palette size
