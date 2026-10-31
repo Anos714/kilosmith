@@ -10,6 +10,13 @@
   --color-acid-dim: #b6d92f;
   --color-muted: #8b929e;
 
+  /* The stock zinc-500/600/700 ramp drops below 4.5:1 on this near-black
+     background, which fails WCAG AA for body copy and the small mono labels.
+     These three keep the same visual order but stay readable. */
+  --color-zinc-500: #9aa1ab;
+  --color-zinc-600: #868d97;
+  --color-zinc-700: #767d87;
+
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
   --font-serif: var(--font-instrument), ui-serif, Georgia, serif;
@@ -76,6 +83,18 @@ body {
 .reveal-in {
   opacity: 1;
   transform: none;
+}
+
+.wordmark::after {
+  content: attr(data-name);
+  display: block;
+  text-align: center;
+  font-size: clamp(4rem, 19vw, 15rem);
+  font-weight: 600;
+  line-height: 0.8;
+  letter-spacing: -0.06em;
+  color: rgb(244 244 245 / 0.07);
+  transform: translateY(8%);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -134,14 +134,7 @@ export function SiteFooter() {
         </div>
       </div>
 
-      <div className="select-none overflow-hidden">
-        <p
-          aria-hidden
-          className="translate-y-[8%] text-center text-[clamp(4rem,19vw,15rem)] font-semibold leading-[0.8] tracking-[-0.06em] text-zinc-100/[0.07]"
-        >
-          {site.name}
-        </p>
-      </div>
+      <div className="wordmark select-none overflow-hidden" data-name={site.name} aria-hidden />
     </footer>
   );
 }
