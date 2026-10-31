@@ -1,0 +1,79 @@
+# sizekit
+
+> sizekit is a free browser toolkit for images and video. Resize one photo into 18 social and app
+> presets with smart crop, compress images to a target size, convert between JPEG, PNG, WebP and
+> AVIF, re-encode video with WebCodecs, build animated GIFs, make memes, and generate a complete
+> favicon kit. Every file is processed on the visitor's own device — nothing is uploaded, there is
+> no account, no watermark and no file limit.
+
+Canonical: https://sizekit.vercel.app
+Author: Rahul Sain — https://github.com/Anos714
+Licence: free for personal and commercial use, no attribution required
+Last updated: 2026-10-30
+
+## What makes it different
+
+- **Local processing.** Images are decoded by the browser's image decoder and re-encoded with its
+  encoder. Video is decoded and encoded with WebCodecs on the local GPU and muxed into an MP4 in
+  memory (`mp4-muxer`). No tool has an upload endpoint.
+- **No server, no bill.** That is why every tool can be free with no quota.
+- **Honest formats.** sizekit probes the browser's encoder at load and only offers a format the
+  browser can actually produce, so a WebP is never a PNG in disguise.
+- **Works offline.** After the page loads, no tool calls the network.
+
+## Tools
+
+### Resize (`/#tools`)
+Batch-resize photos into 18 presets across Instagram (post, portrait, story), X, LinkedIn, Open
+Graph, YouTube and app icons. Uses a saliency attention map — fine edges, coarse edges, saturation
+and skin probability — plus a border penalty so faces are never sliced by a crop. Transparent
+cut-outs are fitted, never cropped. A manual focal point can override the automatic crop. Results
+download individually or as a ZIP. A 12-megapixel photo becomes nine sizes in roughly 440 ms.
+
+### Compress (`/#tools`)
+Reduce image weight with a live before/after total, a quality slider, an optional maximum edge and
+an optional target size in kilobytes (encoder quality is binary-searched to fit). Converts to
+JPEG, PNG, WebP or AVIF.
+
+### Convert (`/#tools`)
+Batch-convert JPEG, PNG, WebP and AVIF. Alpha is preserved where the target format supports it;
+JPEG output is composited on white.
+
+### Video (`/#tools`)
+Compress MP4 and MOV in the browser with WebCodecs. The visitor chooses quality (bitrate budget),
+resolution cap (source, 1080p, 720p, 480p) and whether to keep audio. Audio is re-encoded to AAC.
+No ffmpeg.wasm, no upload, no server.
+
+### GIF (`/#tools`)
+Turn a sequence of stills into a looping GIF with a per-frame delay, width cap and palette size
+(64, 128 or 256 colours). Frames can be reordered.
+
+### Meme (`/#tools`)
+Classic impact-style top and bottom text with wrapping, outline, adjustable size and text colour.
+Exports PNG.
+
+### Favicon (`/#tools`)
+Drop a square logo and get `favicon.ico` (16/32/48), `apple-touch-icon.png`, PNG icons for Android,
+a `manifest.webmanifest` and the `<head>` snippet to paste.
+
+## Common questions
+
+**Does sizekit upload my files?** No. There is no upload endpoint. The Network panel shows no file
+leaving the tab.
+
+**Is it free?** Yes. No account, no trial, no watermark, no daily quota.
+
+**Which browsers?** Any modern browser for the image tools. Video compression needs WebCodecs:
+Chrome and Edge 94+, Safari 16.4+. Firefox support is partial.
+
+**Can I use the output commercially?** Yes, with no attribution.
+
+**Does it set cookies?** No cookies, no localStorage, no analytics.
+
+## Pages
+
+- Home and tools: https://sizekit.vercel.app/
+- Privacy: https://sizekit.vercel.app/privacy
+- Terms: https://sizekit.vercel.app/terms
+- Refunds: https://sizekit.vercel.app/refunds
+- Cookies: https://sizekit.vercel.app/cookies

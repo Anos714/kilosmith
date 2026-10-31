@@ -6,10 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "vendor:avif": "cp node_modules/@jsquash/avif/codec/enc/avif_enc.js node_modules/@jsquash/avif/codec/enc/avif_enc.wasm node_modules/@jsquash/avif/meta.js public/vendor/avif/"
   },
   "dependencies": {
     "fflate": "^0.8.3",
+    "gifenc": "^1.0.3",
+    "mp4-muxer": "^5.2.2",
+    "mp4box": "^2.5.0",
     "next": "16.4.3",
     "react": "19.3.0",
     "react-dom": "19.3.0"
@@ -23,7 +27,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@jsquash/avif": "^2.1.1"
   },
   "packageManager": "bun@1.4.0",
   "ignoreScripts": [

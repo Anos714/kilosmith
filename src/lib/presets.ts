@@ -7,7 +7,7 @@ export type Preset = {
   w: number;
   h: number;
   /** Some platforms need transparency (icons), some need a flat background. */
-  format?: "jpeg" | "png";
+  format?: "jpeg" | "png" | "webp" | "avif";
 };
 
 export type GroupId = "social" | "link" | "icon";

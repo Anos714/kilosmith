@@ -365,7 +365,9 @@ function drawRegion(ctx, source, sx, sy, sw, sh, dw, dh) {
 
 async function render(source, attention, preset, options, focus) {
   const quality = options && typeof options.quality === "number" ? options.quality : 0.9;
-  const type = preset.format === "png" ? "image/png" : "image/jpeg";
+  const format = preset.format || "jpeg";
+  const type =
+    format === "jpeg" ? "image/jpeg" : format === "png" ? "image/png" : `image/${format}`;
 
   /**
    * A cut-out with real transparency is almost always a logo or a product shot:

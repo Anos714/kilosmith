@@ -11,6 +11,7 @@ import {
 } from "@/lib/presets";
 import { extensionOf, formatBytes, slug } from "@/lib/format";
 import { makeZip, saveBlob } from "@/lib/zip";
+import { FORMATS, supportsFormat, type OutFormat } from "@/lib/image";
 
 type Result = { presetId: string; blob: Blob; url: string; w: number; h: number };
 
@@ -28,7 +29,7 @@ type Item = {
 
 type Settings = {
   selected: string[];
-  format: "jpeg" | "png";
+  format: OutFormat;
   fit: FitMode;
   quality: number;
   background: string;
@@ -46,11 +47,25 @@ function activePresets(settings: Settings): Preset[] {
   return PRESETS.filter((p) => settings.selected.includes(p.id));
 }
 
-export default function SizeKit() {
+export default function ResizeTool() {
   const [settings, setSettings] = useState<Settings>(INITIAL);
   const [items, setItems] = useState<Item[]>([]);
   const [dragging, setDragging] = useState(false);
   const [zipping, setZipping] = useState(false);
+  const [supported, setSupported] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const entries = await Promise.all(
+        FORMATS.map(async (entry) => [entry.value, await supportsFormat(entry.value)] as const)
+      );
+      if (alive) setSupported(Object.fromEntries(entries));
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const settingsRef = useRef(settings);
   const itemsRef = useRef<Item[]>([]);
@@ -463,19 +478,18 @@ export default function SizeKit() {
                     Format
                   </p>
                   <Segmented
-                    options={[
-                      { value: "jpeg", label: "JPEG" },
-                      { value: "png", label: "PNG" },
-                    ]}
+                    options={FORMATS.filter((entry) => entry.value !== "avif" && supported[entry.value] !== false).map(
+                      (entry) => ({ value: entry.value, label: entry.label })
+                    )}
                     value={settings.format}
-                    onChange={(value) => patchSettings({ format: value as "jpeg" | "png" })}
+                    onChange={(value) => patchSettings({ format: value as OutFormat })}
                   />
                   <p className="mt-1.5 text-[11px] leading-snug text-zinc-600">
                     Icons always export as PNG.
                   </p>
                 </div>
 
-                {settings.format === "jpeg" && (
+                {settings.format !== "png" && (
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
                       <p className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">

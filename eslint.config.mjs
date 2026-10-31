@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Third-party WASM glue served as a static asset, not project source.
+    "public/vendor/**",
   ]),
 ]);
 
