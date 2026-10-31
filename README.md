@@ -15,7 +15,7 @@ Everything runs in the tab. No upload, no account, no backend, no telemetry.
 | **Convert** | Batch JPEG / PNG / WebP / AVIF. Alpha preserved where the format supports it; JPEG and AVIF composite on white. |
 | **Video** | MP4/MOV re-encode with WebCodecs: quality → bitrate, resolution cap, audio on/off, live progress, MP4 out. |
 | **GIF** | Still sequence → looping GIF with per-frame delay, width cap and 64/128/256-colour palette. |
-| **Meme** | Impact-style top and bottom text with automatic wrapping, outline, size and colour. |
+| **Meme** | 100 built-in templates or your own photo, up to six draggable captions, per-caption font/case/fill/outline, auto-fit sizing, PNG/JPG export and copy to clipboard. |
 | **Favicon** | `.ico` (16/32/48), `apple-touch-icon.png`, Android PNGs, `manifest.webmanifest` and the `<head>` snippet. |
 
 ## Stack
@@ -28,6 +28,7 @@ Everything runs in the tab. No upload, no account, no backend, no telemetry.
   because no browser encodes AVIF from a canvas
 - Video: **WebCodecs** (`VideoDecoder` → canvas → `VideoEncoder`) + **mp4-muxer**, demuxed with **mp4box**
 - GIF: **gifenc** (quantise + apply palette + LZW)
+- Meme templates: 100 WebP images in `public/memes` (built once by `scripts/fetch_memes.py`)
 - Packaging: **fflate** in store mode — images are already compressed, so deflating them only wastes seconds
 
 ## How the resize crop works
@@ -46,6 +47,23 @@ Everything runs in the tab. No upload, no account, no backend, no telemetry.
    already exist.
 
 Click **crop** on any image to drop a focal point manually — every size re-crops around it.
+
+## How the meme tool works
+
+`src/lib/meme.ts` is a pure renderer: given a canvas context, the image and a list of caption
+boxes, it draws the meme and returns the bounding box of each caption. The preview and the
+full-resolution export call the same function, so what you see is what you download.
+
+- Captions are objects (`text`, `x`, `y`, anchor, font, size, fill, outline). Dragging on the canvas
+  hit-tests those returned boxes and writes new `x`/`y`, clamped so a block can never be dragged off
+  the edge. Anchors (`top`/`middle`/`bottom`) decide which edge stays put as the text re-wraps.
+- Auto size binary-searches the largest font size whose wrapped block still fits 92% of the width in
+  at most three lines. Manual mode hands the slider straight to the renderer.
+- Templates are local WebP files; `src/lib/memes.generated.ts` holds names, dimensions and the
+  number of caption slots each format expects, so "Two Buttons" opens with three boxes.
+
+Template images come from Imgflip's public catalogue and are credited in `public/memes/CREDITS.md`;
+rights stay with their owners.
 
 ## How the video compressor works
 
@@ -104,6 +122,9 @@ src/components/tools/*.tsx     one component per tool
 src/components/tool-switcher.tsx  tab host, keeps mounted tools alive
 src/app/**/page.tsx            landing page and legal pages
 public/vendor/avif/            static AVIF encoder (kept out of the bundler on purpose)
+public/memes/                  100 meme templates (WebP) + 240px thumbnails
+scripts/fetch_memes.py         regenerates the template set
+src/lib/meme.ts                meme renderer (shared by preview and export)
 ```
 
 ## Roadmap

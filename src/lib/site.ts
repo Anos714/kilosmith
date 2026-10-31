@@ -66,7 +66,7 @@ export const tools = [
   {
     id: "meme",
     name: "Meme",
-    blurb: "Top and bottom text, real impact outline, instant export.",
+    blurb: "100 ready templates, draggable captions, custom font and outline.",
     icon: "meme",
   },
   {

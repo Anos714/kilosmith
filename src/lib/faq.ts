@@ -40,6 +40,11 @@ export const faq = [
       "Yes. Almost no browser can encode AVIF from a canvas, so sizekit ships a small WebAssembly AVIF encoder and loads it only when you pick AVIF. The trade-off is speed and transparency: an AVIF takes longer than a WebP, and transparent pixels are composited on white because this encoder has no alpha channel.",
   },
   {
+    question: "Where do the meme templates come from?",
+    answer:
+      "The 100 templates are fetched once from Imgflip's public catalogue, re-encoded to WebP and shipped with the app, so they load from this site and work offline. Rights stay with each image's owner — see the credits file. Dropping your own photo uses the same editor and never leaves your device.",
+  },
+  {
     question: "Why do some HEIC files fail to open?",
     answer:
       "HEIC is Apple's format. Safari decodes it, Chrome does not yet. If a photo will not load, export it as JPEG from Photos first — sizekit will happily process that.",

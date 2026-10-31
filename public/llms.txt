@@ -49,8 +49,11 @@ Turn a sequence of stills into a looping GIF with a per-frame delay, width cap a
 (64, 128 or 256 colours). Frames can be reordered.
 
 ### Meme (`/#tools`)
-Classic impact-style top and bottom text with wrapping, outline, adjustable size and text colour.
-Exports PNG.
+100 built-in templates shipped with the app, or drop your own photo. Up to six captions, each
+independently draggable with its own font, case, fill, outline and auto-fit size; the renderer is
+shared by the preview and the full-resolution export. Search and tag filters find a template fast.
+Exports PNG or JPG, or copies straight to the clipboard. Template images are credited to Imgflip
+and their owners; rights stay with them.
 
 ### Favicon (`/#tools`)
 Drop a square logo and get `favicon.ico` (16/32/48), `apple-touch-icon.png`, PNG icons for Android,
