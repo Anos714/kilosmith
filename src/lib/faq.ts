@@ -27,12 +27,12 @@ export const faq = [
   {
     question: "Can I use the output commercially?",
     answer:
-      "Yes. Your files stay yours: no attribution, no licence, no upload. Compress a client video, export a meme, ship a favicon: it is all yours.",
+      "Yes. Your files stay yours: no attribution needed for what you make, the tool itself is MIT-licensed, and nothing is uploaded. Compress a client video, export a meme, ship a favicon: it is all yours.",
   },
   {
     question: "Does Kilosmith use analytics or cookies?",
     answer:
-      "No analytics, no tracking pixels and no advertising cookies. The only cookie-sized thing on this site is the theme, and there isn't even that. Everything is local state.",
+      "Only Vercel Web Analytics: one anonymous, cookieless page-view beacon. It records that a page was viewed — never your files, filenames or contents — and sets no cookies, no localStorage and no advertising pixels. Everything else on the site is local state.",
   },
   {
     question: "Is the AVIF really AVIF?",

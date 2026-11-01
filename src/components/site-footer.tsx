@@ -143,7 +143,7 @@ export function SiteFooter() {
             . Powered by coffee and good intentions.
           </p>
           <div className="flex flex-wrap gap-2 text-[12px]">
-            {["no uploads", "no accounts", "no telemetry"].map((note) => (
+            {["no uploads", "no accounts", "no cookies"].map((note) => (
               <span
                 key={note}
                 className="rounded-full border-2 border-ink/80 bg-card px-2.5 py-0.5 text-ink-2"

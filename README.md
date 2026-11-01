@@ -16,6 +16,7 @@
   <img src="https://img.shields.io/badge/React%2019-221139?style=flat-square&logo=react&logoColor=61dafb" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-221139?style=flat-square&logo=typescript&logoColor=3178c6" alt="TypeScript" />
   <img src="https://img.shields.io/badge/WebCodecs-ff5da2" alt="WebCodecs" />
+  <img src="https://img.shields.io/badge/license-MIT-221139" alt="MIT license" />
   <img src="https://img.shields.io/badge/0%20bytes%20uploaded-00c98d" alt="Nothing is uploaded" />
 </p>
 
@@ -40,8 +41,9 @@
 ---
 
 Everything runs in the tab. The browser decodes, resizes, converts and re-encodes your files on
-your own machine; there is no upload endpoint to hit, no account to make and no telemetry to
-send. Open the network tab while you work — nothing leaves the page.
+your own machine; there is no upload endpoint to hit and no account to make. Open the network tab
+while you work — your files never leave the page. The only outbound script is an anonymous,
+cookieless page-view beacon (Vercel Web Analytics).
 
 ## Tools
 
@@ -215,6 +217,30 @@ python3 scripts/fetch_memes.py          # 200 templates
 python3 scripts/fetch_memes.py --limit 40
 ```
 
+## Open source & self-host
+
+Kilosmith is **MIT licensed** ([LICENSE](LICENSE)) — free for personal and commercial use. Use it,
+fork it, ship it in a product, run it for clients: no permission needed, no attribution required,
+no royalty. The only condition is that the license notice stays with redistributions of the code
+itself; whatever you make with the tools is entirely yours.
+
+Self-hosting is a standard Next.js app — no API keys, no external services, no database:
+
+```bash
+git clone https://github.com/Anos714/kilosmith.git
+cd kilosmith
+bun install
+bun run build   # production build
+bun run start   # serve on :3000
+```
+
+Deploy it anywhere that runs Next.js (Vercel, Netlify, a VPS with `node`, Docker) — or fork it and
+strip it down; every route is prerendered, so the whole site works as static files too. The only
+optional service is Vercel Web Analytics (one line in `src/app/layout.tsx`); delete it and the site
+is 100% script-of-your-own again. All processing is client-side, so hosting costs are one static
+bundle — the heaviest asset is the AVIF encoder's 3.4 MB wasm, and even that loads only when
+someone picks AVIF.
+
 ## Deployment
 
 The repo is connected to **Vercel**: every push to `main` builds and deploys automatically.
@@ -266,5 +292,5 @@ Built by **Rahul Sain** — [X](https://x.com/RahulSain714) ·
 [GitHub](https://github.com/Anos714/kilosmith) ·
 [Buy Me a Coffee](https://buymeacoffee.com/anos714) ·
 [sainrahul374@gmail.com](mailto:sainrahul374@gmail.com).
-Free for personal and commercial use, no attribution required.
+Free for personal and commercial use under the [MIT licence](LICENSE).
 Meme templates belong to their original owners; the Imgflip catalogue is the source.

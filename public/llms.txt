@@ -8,7 +8,7 @@
 
 Canonical: https://kilosmith.app
 Author: Rahul Sain — sainrahul374@gmail.com — https://github.com/Anos714/kilosmith
-Licence: free for personal and commercial use, no attribution required
+Licence: MIT — free for personal and commercial use, fork and self-host it
 Last updated: 2026-11-01
 
 ## What Kilosmith is
@@ -94,7 +94,10 @@ WebCodecs: Chrome and Edge 94+, Safari 16.4+. Firefox support is partial.
 
 **Can I use the output commercially?** Yes, with no attribution.
 
-**Does it set cookies?** No cookies, no localStorage, no analytics.
+**Does it set cookies?** No cookies, no localStorage. The only script is Vercel Web
+Analytics — anonymous, cookieless page views; it never sees your files.
+
+**Is it open source?** Yes, MIT. Fork it, self-host it, ship it in a product.
 
 ## Pages
 

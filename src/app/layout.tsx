@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { Analytics } from "@vercel/analytics/next";
 import { site } from "@/lib/site";
 import { themeBootstrap } from "@/lib/theme";
 import "./globals.css";
@@ -156,6 +157,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         {children}
+        {/* Cookieless, anonymous page views — no file data, ever. */}
+        <Analytics />
       </body>
     </html>
   );
