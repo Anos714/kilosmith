@@ -1,10 +1,12 @@
-# sizekit
+# Kilosmith
 
-Eight browser tools for images and video. Crop, rotate and straighten a photo, resize it into 18
-social and app presets, compress to a target size, convert between JPEG, PNG, WebP and AVIF, shrink
-video with WebCodecs, build a looping GIF, make a meme, and generate a complete favicon kit.
+**Heavy files, made light.** Eight browser tools for images and video. Crop, rotate and straighten a
+photo, resize it into 18 social and app presets, compress to a target size, convert between JPEG, PNG,
+WebP and AVIF, shrink video with WebCodecs, build a looping GIF, make a meme, and generate a complete
+favicon kit.
 
-Everything runs in the tab. No upload, no account, no backend, no telemetry.
+Everything runs in the tab. No upload, no account, no backend, no telemetry. Live at
+[kilosmith.app](https://kilosmith.app).
 
 ## Tools
 
@@ -19,11 +21,39 @@ Everything runs in the tab. No upload, no account, no backend, no telemetry.
 | **Meme** | 100 built-in templates or your own photo, up to six draggable captions, per-caption font/case/fill/outline, auto-fit sizing, PNG/JPG export and copy to clipboard. |
 | **Favicon** | `.ico` (16/32/48), `apple-touch-icon.png`, Android PNGs, `manifest.webmanifest` and the `<head>` snippet. |
 
+## Design
+
+The interface is a **candy brutalist** theme — sherbet on cream. A `#fff9ee` paper ground, a deep grape
+ink (`#221139`), one hot-pink accent and eight per-tool crayons (mint, sun, sky, lilac, coral, bubble,
+butter, aqua). Every surface wears a 2px ink border and a hard, blur-free offset shadow
+(`--shadow-pop: 4px 4px 0 ink`), corners are soft (`--radius-card: 28px`), and things wiggle, bounce and
+tilt on hover. **Fredoka** — a rounded display face — carries headings, buttons and numbers; **Mona Sans**
+does body copy. Copy is a participant, not a caption: "chop chop", "make it skinny", "plop it here",
+"thinking…", "ready!", "oops". The eight tools live in a single tabbed workbench so the live product is
+the hero rather than a full-screen masthead. Tokens live in `src/app/tokens.css`, base element rules in
+`src/app/base.css`, and the shared workbench kit (`.pane`, `.tile`, `.meter`, `.hairline`, `.tag`,
+`.pill-btn`, `.icon-btn`, `.bg-checker`) at the top of `src/app/globals.css`.
+
+The mark is the **weight ladder** — three bars, each shorter and more colourful than the last, the final
+one in pink. It is one geometry reused everywhere: header and footer (`src/components/brand.tsx`),
+`src/app/icon.svg`, `favicon.ico`, the apple touch icon, the PWA icons and the Open Graph card.
+Regenerate every asset from that single source:
+
+```bash
+node scripts/brand-assets.mjs
+```
+
+That script needs `sharp` and a local Chrome (auto-detected from `~/.cache/puppeteer`, or set
+`CHROME_PATH`). It writes `src/app/icon.svg`, `src/app/favicon.ico`, `src/app/apple-icon.png`,
+`public/icon-192/512/1024.png` and `public/og.png` (1200×630).
+
 ## Stack
 
 - **Next.js 16** (App Router, Turbopack, static output) + **React 19** with **React Compiler**
 - **Bun** as package manager and script runner
-- **Tailwind CSS v4** with a small token layer in `src/app/globals.css`
+- **Tailwind CSS v4** with a small token layer in `src/app/tokens.css`
+- **Mona Sans** (body) and **Fredoka** (display) self-hosted through `next/font/local`
+  (`src/app/fonts/*.woff2`) — variable weight and width, no external font request
 - Rendering: `OffscreenCanvas` on the main thread and inside `public/resize.worker.js`
 - Encoding: the browser's own `toBlob`, plus Squoosh's AVIF encoder (WASM) served from `/public/vendor/avif`
   because no browser encodes AVIF from a canvas
@@ -107,13 +137,16 @@ so `bun run vendor:avif` can refresh the copy from upstream.
 
 ## SEO / GEO
 
-- `metadata` in `src/app/layout.tsx`: canonical, Open Graph, Twitter card, keywords, author.
+- `metadata` in `src/app/layout.tsx`: canonical `https://kilosmith.app`, Open Graph, Twitter card,
+  keywords, author, and an explicit `icons` set.
 - Static assets: `public/og.png` (1200×630), `src/app/favicon.ico`, `src/app/icon.svg`,
   `src/app/apple-icon.png`, `public/icon-192.png`, `public/icon-512.png`.
 - Routes: `sitemap.xml`, `robots.txt` (explicitly allows GPTBot, ClaudeBot, PerplexityBot and friends),
-  `manifest.webmanifest`.
-- `public/llms.txt` summarises the product for answer engines.
+  `manifest.webmanifest` with app shortcuts.
+- `public/llms.txt` summarises the product, tools and answers for answer engines.
 - JSON-LD: `SoftwareApplication`, `WebSite`, `Person` (with `sameAs` social profiles) and `FAQPage`.
+- Visible `FAQPage` copy is generated from the same `src/lib/faq.ts` data as the markup, so the two
+  cannot drift apart.
 
 ## Scripts
 
@@ -134,9 +167,15 @@ src/lib/video.ts               WebCodecs compress pipeline
 src/lib/presets.ts             the whole preset table (add a platform = one line)
 src/lib/faq.ts                 FAQ copy, shared by the page and the JSON-LD
 src/lib/site.ts                brand, author, social links, tool metadata
+src/app/tokens.css             Candy colour, shape, motion and type tokens
+src/app/base.css               base elements, focus ring, reduced motion
+src/components/brand.tsx       the weight-ladder mark and wordmark
 src/components/tools/*.tsx     one component per tool
+src/components/ui.tsx          shared Panel, Field, Segmented, Slider, Button, Chip, MiniButton,
+                               IconButton, StatusTag, DropZone
 src/components/tool-switcher.tsx  tab host, keeps mounted tools alive
 src/app/**/page.tsx            landing page and legal pages
+scripts/brand-assets.mjs       regenerates icon, favicon, apple icon, PWA icons and OG card
 public/vendor/avif/            static AVIF encoder (kept out of the bundler on purpose)
 public/memes/                  100 meme templates (WebP) + 240px thumbnails
 scripts/fetch_memes.py         regenerates the template set
@@ -146,6 +185,15 @@ src/lib/meme.ts                meme renderer (shared by preview and export)
 ## Roadmap
 
 - [ ] HEIC input (lazy decoder) with a clear fallback message
-- [ ] Trim and crop controls in the video tool
+- [ ] Video crop inside the compressor (frame-level)
 - [ ] Custom size input and per-preset overrides
 - [ ] Tests for the crop math in a plain DOM worker harness
+
+## Credits
+
+Built by **Rahul Sain** — [X](https://x.com/RahulSain714) ·
+[LinkedIn](https://www.linkedin.com/in/rahulxcode/) ·
+[GitHub](https://github.com/Anos714/kilosmith) ·
+[Buy Me a Coffee](https://buymeacoffee.com/anos714) ·
+[sainrahul374@gmail.com](mailto:sainrahul374@gmail.com).
+Meme templates belong to their original owners; the Imgflip catalogue is the source.
