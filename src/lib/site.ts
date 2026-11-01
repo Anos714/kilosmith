@@ -94,7 +94,7 @@ export const tools = [
   {
     id: "meme",
     name: "Meme",
-    blurb: "100 ready templates, draggable captions, custom font and outline.",
+    blurb: "200 ready templates, draggable captions, custom font and outline.",
     icon: "meme",
     color: "bg-butter",
     doodle: "go on, be unreasonable",

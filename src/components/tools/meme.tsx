@@ -353,7 +353,7 @@ export default function MemeTool() {
           accent="bg-butter"
           doodle="go on, be unreasonable"
           title="Start from a template, or drop your own image"
-          hint="100 ready-made templates below. Your photo never leaves this tab."
+          hint={`${MEME_TEMPLATES.length} ready-made templates below. Your photo never leaves this tab.`}
         />
         {status && <div className="flex justify-center">{status}</div>}
         <TemplateBrowser onPick={pickTemplate} onUpload={onFiles} />
@@ -693,7 +693,7 @@ const TemplateBrowser = memo(function TemplateBrowser({
   );
 });
 
-/* Hoisted so each tile has its own memo boundary — the grid holds 100 of them. */
+/* Hoisted so each tile has its own memo boundary — the grid holds a couple hundred of them. */
 const TemplateTile = memo(function TemplateTile({
   template,
   eager,

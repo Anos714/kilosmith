@@ -1,12 +1,47 @@
-# Kilosmith
+<p align="center">
+  <img src="public/icon-512.png" width="96" height="96" alt="Kilosmith icon" />
+</p>
 
-**Heavy files, made light.** Eight browser tools for images and video. Crop, rotate and straighten a
-photo, resize it into 18 social and app presets, compress to a target size, convert between JPEG, PNG,
-WebP and AVIF, shrink video with WebCodecs, build a looping GIF, make a meme, and generate a complete
-favicon kit.
+<h1 align="center">Kilosmith</h1>
 
-Everything runs in the tab. No upload, no account, no backend, no telemetry. Live at
-[kilosmith.app](https://kilosmith.app).
+<p align="center">
+  <b>Heavy files, made light.</b><br />
+  Eight free tools for images and video that run entirely in your browser —<br />
+  no upload, no account, no watermark, no file limit, no server in the middle.
+</p>
+
+<p align="center">
+  <a href="https://kilosmith.vercel.app"><img src="https://img.shields.io/badge/live-kilosmith.vercel.app-221139?style=flat-square&logo=vercel" alt="Live demo" /></a>
+  <img src="https://img.shields.io/badge/Next.js%2016-221139?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js 16" />
+  <img src="https://img.shields.io/badge/React%2019-221139?style=flat-square&logo=react&logoColor=61dafb" alt="React 19" />
+  <img src="https://img.shields.io/badge/TypeScript-221139?style=flat-square&logo=typescript&logoColor=3178c6" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/WebCodecs-ff5da2" alt="WebCodecs" />
+  <img src="https://img.shields.io/badge/0%20bytes%20uploaded-00c98d" alt="Nothing is uploaded" />
+</p>
+
+<p align="center">
+  <a href="https://kilosmith.vercel.app">▶ Try it live</a> ·
+  <a href="#tools">Tools</a> ·
+  <a href="#design">Design</a> ·
+  <a href="#stack">Stack</a> ·
+  <a href="#scripts">Run it yourself</a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/home.png" alt="Kilosmith home page — Heavy files, made light" width="880" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/resize.png" alt="Resize workbench — 18 presets with smart crops" width="430" />
+  &nbsp;
+  <img src="docs/screenshots/meme.png" alt="Meme tool — 200 built-in templates with tag filters" width="430" />
+</p>
+
+---
+
+Everything runs in the tab. The browser decodes, resizes, converts and re-encodes your files on
+your own machine; there is no upload endpoint to hit, no account to make and no telemetry to
+send. Open the network tab while you work — nothing leaves the page.
 
 ## Tools
 
@@ -16,10 +51,18 @@ Everything runs in the tab. No upload, no account, no backend, no telemetry. Liv
 | **Crop** | Rotate 90°, flip, straighten ±15°, free or preset aspects (1:1, 4:5, 9:16, 16:9, 3:2), draggable box with rule-of-thirds guides, lossless preview, export to any supported format. |
 | **Compress** | Quality slider, max edge, optional target size in KB (binary-searched encoder quality), live before/after. |
 | **Convert** | Batch JPEG / PNG / WebP / AVIF. Alpha preserved where the format supports it; JPEG and AVIF composite on white. |
-| **Video** | MP4/MOV re-encode with WebCodecs: trim in/out, quality → bitrate, resolution cap, audio on/off, live progress, MP4 out. |
+| **Video** | MP4/MOV re-encode with WebCodecs: trim in/out, quality → bitrate, resolution cap, audio on/off (AAC with an Opus fallback, so the soundtrack survives), live progress, MP4 out. |
 | **GIF** | Still sequence → looping GIF with per-frame delay, width cap and 64/128/256-colour palette. |
 | **Meme** | 200 built-in templates or your own photo, up to six draggable captions, per-caption font/case/fill/outline, auto-fit sizing, PNG/JPG export and copy to clipboard. |
 | **Favicon** | `.ico` (16/32/48), `apple-touch-icon.png`, Android PNGs, `manifest.webmanifest` and the `<head>` snippet. |
+
+### Why it exists
+
+Normal media tools send your file to a server, queue it, and send back a smaller one. That is a
+round trip for a job your laptop can do in a second, and it means your photos, your face and your
+videos sit on someone else's disk while you wait. Kilosmith skips the round trip: the browser is
+the encoder. It is also the fallback for the moment a desktop app feels like too much ceremony —
+one tab, eight tools, zero signup.
 
 ## Design
 
@@ -59,7 +102,7 @@ That script needs `sharp` and a local Chrome (auto-detected from `~/.cache/puppe
   because no browser encodes AVIF from a canvas
 - Video: **WebCodecs** (`VideoDecoder` → canvas → `VideoEncoder`) + **mp4-muxer**, demuxed with **mp4box**
 - GIF: **gifenc** (quantise + apply palette + LZW)
-- Meme templates: 100 WebP images in `public/memes` (built once by `scripts/fetch_memes.py`)
+- Meme templates: 200 WebP images in `public/memes` (built once by `scripts/fetch_memes.py`)
 - Packaging: **fflate** in store mode — images are already compressed, so deflating them only wastes seconds
 
 ## How video trimming works
@@ -67,7 +110,7 @@ That script needs `sharp` and a local Chrome (auto-detected from `~/.cache/puppe
 The in/out sliders are seconds, not frames. `compressVideo` finds the keyframe at or before the
 in-point (a decoder cannot start mid-GOP), feeds that GOP and drops every decoded frame outside the
 range, then stops at the first keyframe past the out-point. Encoder timestamps are shifted so the
-output starts at 0, and the AAC path slices the decoded audio buffer with the same range. A 10-second
+output starts at 0, and the audio path slices the decoded buffer with the same range. A 10-second
 clip trimmed to 2–6 s comes out at 4.03 s.
 
 ## How the crop tool works
@@ -108,8 +151,10 @@ full-resolution export call the same function, so what you see is what you downl
 - Templates are local WebP files; `src/lib/memes.generated.ts` holds names, dimensions and the
   number of caption slots each format expects, so "Two Buttons" opens with three boxes.
 
-Template images come from Imgflip's public catalogue and are credited in `public/memes/CREDITS.md`;
-rights stay with their owners.
+The 200 templates are Imgflip's top 100 (from their public API) plus the next 100 by popularity
+from their sitemap, fetched once by `scripts/fetch_memes.py` and re-encoded to WebP so the app
+never talks to a third party at runtime. They are credited in `public/memes/CREDITS.md`; rights
+stay with their owners.
 
 ## How the video compressor works
 
@@ -145,9 +190,11 @@ so `bun run vendor:avif` can refresh the copy from upstream.
 - Static assets: `public/og.png` (1200×630), `src/app/favicon.ico`, `src/app/icon.svg`,
   `src/app/apple-icon.png`, `public/icon-192.png`, `public/icon-512.png`.
 - Routes: `sitemap.xml`, `robots.txt` (explicitly allows GPTBot, ClaudeBot, PerplexityBot and friends),
-  `manifest.webmanifest` with app shortcuts.
+  `manifest.webmanifest` with app shortcuts, and a branded `not-found.tsx` for unmatched URLs
+  (auto-noindexed).
 - `public/llms.txt` summarises the product, tools and answers for answer engines.
-- JSON-LD: `SoftwareApplication`, `WebSite`, `Person` (with `sameAs` social profiles) and `FAQPage`.
+- JSON-LD: `SoftwareApplication` (with `datePublished` and `dateModified`), `WebSite`, `Person`
+  (with `sameAs` social profiles) and `FAQPage`.
 - Visible `FAQPage` copy is generated from the same `src/lib/faq.ts` data as the markup, so the two
   cannot drift apart.
 
@@ -161,12 +208,31 @@ bun run lint
 bun run vendor:avif  # re-copy the AVIF encoder from @jsquash/avif into /public
 ```
 
+Regenerate the meme template set (network required):
+
+```bash
+python3 scripts/fetch_memes.py          # 200 templates
+python3 scripts/fetch_memes.py --limit 40
+```
+
+## Deployment
+
+The repo is connected to **Vercel**: every push to `main` builds and deploys automatically.
+Live at **[kilosmith.vercel.app](https://kilosmith.vercel.app)** (custom domain `kilosmith.app`
+attaches by adding it under the project's Domains — metadata and canonical URLs already point
+there). One-time setup if you fork it:
+
+```bash
+npx vercel link --yes --project <your-name>
+npx vercel deploy --prod --yes
+```
+
 ## Layout
 
 ```
 public/resize.worker.js        worker: decode → saliency → render → encode
 src/lib/image.ts               format table, encode helpers, target-size search, AVIF WASM bridge
-src/lib/video.ts               WebCodecs compress pipeline
+src/lib/video.ts               WebCodecs compress pipeline (AAC with Opus fallback)
 src/lib/presets.ts             the whole preset table (add a platform = one line)
 src/lib/faq.ts                 FAQ copy, shared by the page and the JSON-LD
 src/lib/site.ts                brand, author, social links, tool metadata
@@ -177,12 +243,13 @@ src/components/tools/*.tsx     one component per tool
 src/components/ui.tsx          shared Panel, Field, Segmented, Slider, Button, Chip, MiniButton,
                                IconButton, StatusTag, DropZone
 src/components/tool-switcher.tsx  tab host, keeps mounted tools alive
-src/app/**/page.tsx            landing page and legal pages
+src/app/**/page.tsx            landing page, legal pages and the branded 404
 scripts/brand-assets.mjs       regenerates icon, favicon, apple icon, PWA icons and OG card
 public/vendor/avif/            static AVIF encoder (kept out of the bundler on purpose)
-public/memes/                  100 meme templates (WebP) + 240px thumbnails
-scripts/fetch_memes.py         regenerates the template set
+public/memes/                  200 meme templates (WebP) + 240px thumbnails
+scripts/fetch_memes.py         regenerates the template set (API top 100 + sitemap overflow)
 src/lib/meme.ts                meme renderer (shared by preview and export)
+docs/screenshots/              README screenshots
 ```
 
 ## Roadmap
@@ -199,4 +266,5 @@ Built by **Rahul Sain** — [X](https://x.com/RahulSain714) ·
 [GitHub](https://github.com/Anos714/kilosmith) ·
 [Buy Me a Coffee](https://buymeacoffee.com/anos714) ·
 [sainrahul374@gmail.com](mailto:sainrahul374@gmail.com).
+Free for personal and commercial use, no attribution required.
 Meme templates belong to their original owners; the Imgflip catalogue is the source.
