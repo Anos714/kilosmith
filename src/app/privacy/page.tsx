@@ -4,7 +4,7 @@ import { LegalPage } from "@/components/legal";
 export const metadata: Metadata = {
   title: "Privacy",
   description:
-    "Kilosmith processes every file on your device. No uploads, no accounts, no analytics, no tracking pixels.",
+    "Kilosmith processes every file on your device. No uploads, no accounts, no tracking pixels — the only script is a cookieless page-view beacon.",
   alternates: { canonical: "/privacy" },
   openGraph: { url: "/privacy" },
 };
@@ -13,14 +13,15 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy"
-      intro="The short version: your files never leave your device. There is no upload endpoint, no account and no analytics to opt out of."
+      intro="The short version: your files never leave your device. There is no upload endpoint, no account, and the only script on the site is an anonymous, cookieless page-view beacon."
     >
       <section>
         <h2 className="legal-title">What we collect</h2>
         <p>
-          Nothing that identifies you. Kilosmith has no user accounts, no sign-in, no cookies for
-          advertising and no analytics script. We do not log filenames, image contents, video
-          contents or processing history.
+          Nothing that identifies you. Kilosmith has no user accounts, no sign-in and no cookies for
+          advertising. The one script on the site — Vercel Web Analytics — records that a page was
+          viewed; it never sees filenames, image contents, video contents or processing history,
+          because none of that ever leaves the tab.
         </p>
       </section>
 
@@ -60,7 +61,7 @@ export default function PrivacyPage() {
         <h2 className="legal-title">Third parties</h2>
         <ul>
           <li>No advertising networks.</li>
-          <li>No analytics providers.</li>
+          <li>Analytics: Vercel Web Analytics only — anonymous page views, cookieless, no file data.</li>
           <li>No social embeds or tracking pixels.</li>
           <li>Fonts are self-hosted with the app, not fetched from a font CDN.</li>
         </ul>
