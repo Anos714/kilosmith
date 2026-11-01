@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { site } from "@/lib/site";
 
 /**
- * Everything is public and static, so crawlers get the whole site — including
+ * Everything is public and static, so crawlers get the whole site: including
  * the AI crawlers that power answer engines (GEO). Nothing here needs to be
  * hidden behind a disallow.
  */
