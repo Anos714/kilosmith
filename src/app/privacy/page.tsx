@@ -4,7 +4,7 @@ import { LegalPage } from "@/components/legal";
 export const metadata: Metadata = {
   title: "Privacy",
   description:
-    "sizekit processes every file on your device. No uploads, no accounts, no analytics, no tracking pixels.",
+    "Kilosmith processes every file on your device. No uploads, no accounts, no analytics, no tracking pixels.",
   alternates: { canonical: "/privacy" },
   openGraph: { url: "/privacy" },
 };
@@ -16,16 +16,16 @@ export default function PrivacyPage() {
       intro="The short version: your files never leave your device. There is no upload endpoint, no account and no analytics to opt out of."
     >
       <section>
-        <h2>What we collect</h2>
+        <h2 className="legal-title">What we collect</h2>
         <p>
-          Nothing that identifies you. sizekit has no user accounts, no sign-in, no cookies for
+          Nothing that identifies you. Kilosmith has no user accounts, no sign-in, no cookies for
           advertising and no analytics script. We do not log filenames, image contents, video
           contents or processing history.
         </p>
       </section>
 
       <section>
-        <h2>How files are processed</h2>
+        <h2 className="legal-title">How files are processed</h2>
         <p>
           Images are decoded by your browser&apos;s built-in image decoder and re-encoded with its
           encoder. Video is decoded and encoded with WebCodecs on your own GPU, then muxed into an
@@ -39,7 +39,7 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>Hosting and server logs</h2>
+        <h2 className="legal-title">Hosting and server logs</h2>
         <p>
           The site is served as static files by a hosting provider. Like any web host, that provider
           may keep short-lived access logs (IP address, user agent, requested URL) for security and
@@ -49,15 +49,15 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>Local storage</h2>
+        <h2 className="legal-title">Local storage</h2>
         <p>
-          sizekit does not write to cookies, localStorage or IndexedDB. Tool settings live in
+          Kilosmith does not write to cookies, localStorage or IndexedDB. Tool settings live in
           memory and disappear when you close the tab.
         </p>
       </section>
 
       <section>
-        <h2>Third parties</h2>
+        <h2 className="legal-title">Third parties</h2>
         <ul>
           <li>No advertising networks.</li>
           <li>No analytics providers.</li>
@@ -67,15 +67,15 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>Children</h2>
+        <h2 className="legal-title">Children</h2>
         <p>
-          sizekit is a general-purpose utility and is not directed at children under 13. Because no
+          Kilosmith is a general-purpose utility and is not directed at children under 13. Because no
           personal data is collected, there is nothing to delete on request.
         </p>
       </section>
 
       <section>
-        <h2>Changes</h2>
+        <h2 className="legal-title">Changes</h2>
         <p>
           If this policy changes, the date at the top of the page changes with it. Material changes
           will be noted in the project&apos;s public repository.

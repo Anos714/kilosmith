@@ -6,7 +6,7 @@ import { site } from "@/lib/site";
 export function LegalPage({
   title,
   intro,
-  updated = "30 October 2026",
+  updated = "1 November 2026",
   children,
 }: {
   title: string;
@@ -17,25 +17,49 @@ export function LegalPage({
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-5 pb-16 pt-14 sm:px-8">
-        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-600">
-          Legal · updated {updated}
-        </p>
-        <h1 className="mt-3 text-[34px] font-semibold leading-tight tracking-[-0.035em] text-zinc-50">
-          {title}
-        </h1>
-        <p className="mt-3 text-[14px] leading-relaxed text-zinc-400">{intro}</p>
+      <main className="container flex-1 pb-16 pt-12 sm:pt-16">
+        <div className="mx-auto max-w-[70ch] text-center">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <span className="sticker -rotate-1 bg-lilac text-[12px]">the fine print</span>
+            <span className="text-[13px] text-muted">updated {updated}</span>
+          </div>
+          <h1 className="mt-5 min-w-0 text-[clamp(2.4rem,4.4vw,3.6rem)] [overflow-wrap:break-word]">
+            {title}
+          </h1>
+          <p className="lead mx-auto mt-5 max-w-[58ch] text-ink-2">{intro}</p>
 
-        <div className="mt-10 space-y-8 text-[13px] leading-relaxed text-zinc-400 [&_a]:text-zinc-200 [&_a]:underline [&_a]:decoration-line [&_a]:underline-offset-4 [&_h2]:mb-2 [&_h2]:text-[14px] [&_h2]:font-medium [&_h2]:text-zinc-100 [&_li]:ml-4 [&_li]:list-disc [&_p+p]:mt-3 [&_ul]:space-y-1.5">
-          {children}
-        </div>
+          <div className="pop mt-10 bg-card p-6 text-left sm:p-8">
+            <div className="space-y-8 text-[15px] leading-relaxed text-ink-2 [&_a]:font-medium [&_a]:text-ink [&_a]:decoration-accent [&_a]:decoration-2 [&_a]:underline-offset-4 [&_h2]:mb-3 [&_h2]:text-[24px] [&_h2]:text-ink [&_li]:ml-5 [&_li]:list-disc [&_li]:marker:text-accent [&_p+p]:mt-3 [&_ul]:space-y-2">
+              {children}
+            </div>
+          </div>
 
-        <div className="mt-12 rounded-xl border border-line bg-panel px-4 py-3 text-[12px] text-zinc-500">
-          Questions about this page? Write to{" "}
-          <a href={`mailto:${site.author.email}`} className="text-zinc-200 underline decoration-line underline-offset-4">
-            {site.author.email}
-          </a>{" "}
-          — a human ({site.author.name}) answers.
+          <div className="pop mt-8 rounded-2xl border-2 border-dashed border-rule-2 bg-card/60 px-4 py-4 text-[14px] text-muted">
+            <p>
+              Questions about this page? Write to{" "}
+              <a
+                href={`mailto:${site.author.email}`}
+                className="break-all font-medium text-ink underline decoration-accent decoration-2 underline-offset-4"
+              >
+                {site.author.email}
+              </a>{" "}
+              — a human ({site.author.name}) answers.
+            </p>
+            <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[13px]">
+              {site.social.map((item) => (
+                <li key={item.href}>
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="font-[family-name:var(--font-display)] font-medium text-ink-2 decoration-accent underline-offset-4 transition-colors hover:text-accent-deep hover:underline"
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </main>
       <SiteFooter />
