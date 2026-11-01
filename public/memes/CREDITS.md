@@ -1,8 +1,10 @@
 # Meme template credits
 
-The 100 images in this folder come from the public Imgflip meme catalogue
+The 200 images in this folder come from the public Imgflip meme catalogue
 (https://imgflip.com), fetched by `scripts/fetch_memes.py` and re-encoded to
 WebP locally so the app serves them from its own origin and works offline.
+The set is the catalogue's top 100 from the Imgflip API plus the next 100 by
+popularity from its sitemap, in that order.
 
 They are included as meme templates. Copyright and any other rights in each
 image remain with its original owner; nothing here is claimed by Kilosmith.
