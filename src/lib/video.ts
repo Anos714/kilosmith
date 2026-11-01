@@ -46,20 +46,51 @@ function clamp(value: number, min: number, max: number, fallback: number) {
   return Math.min(max, Math.max(min, next));
 }
 
-/** AAC encoding is platform-dependent: Chrome on Linux often has no encoder. */
-export async function canEncodeAac(): Promise<boolean> {
+export type AudioCodec = "aac" | "opus";
+
+async function encoderSupported(config: AudioEncoderConfig): Promise<boolean> {
   if (typeof AudioEncoder === "undefined") return false;
   try {
-    const support = await AudioEncoder.isConfigSupported({
-      codec: "mp4a.40.2",
-      sampleRate: 48_000,
-      numberOfChannels: 2,
-      bitrate: 128_000,
-    });
+    const support = await AudioEncoder.isConfigSupported(config);
     return !!support.supported;
   } catch {
     return false;
   }
+}
+
+/**
+ * AAC encoding is platform-dependent — Chrome on Linux often has none — but the
+ * Opus encoder ships with every WebCodecs build, so ask for AAC first (with the
+ * source's real rate and channels) and fall back to Opus. Opus only takes a
+ * short list of sample rates, so it is always probed at 48 kHz; the caller
+ * resamples the decoded audio to match.
+ */
+export async function pickAudioEncoder(
+  sampleRate = 48_000,
+  numberOfChannels = 2
+): Promise<AudioCodec | null> {
+  const channels = Math.min(2, Math.max(1, numberOfChannels));
+  if (
+    await encoderSupported({
+      codec: "mp4a.40.2",
+      sampleRate,
+      numberOfChannels: channels,
+      bitrate: 128_000,
+    })
+  ) {
+    return "aac";
+  }
+  if (
+    await encoderSupported({
+      codec: "opus",
+      sampleRate: 48_000,
+      numberOfChannels: channels,
+      bitrate: 128_000,
+    })
+  ) {
+    return "opus";
+  }
+  return null;
 }
 
 export function canUseWebCodecs() {
@@ -310,6 +341,39 @@ export async function compressVideo(
 
   const chosen = await pickCodec(width, height, bitrate, framerate);
 
+  // Audio is prepared before the muxer exists: the muxer declares its audio
+  // track from the codec, channel count and sample rate actually used, so the
+  // encode has to finish first. Buffering the compressed chunks costs a few
+  // hundred kilobytes and lets a failed encode leave the track undeclared
+  // instead of finalising an empty one.
+  let note: string | undefined;
+  let prepared: PreparedAudio | null = null;
+  if (!options.keepAudio) {
+    note = "Audio was left out: the switch is off.";
+  } else if (clipDuration >= 900) {
+    note = "Audio skipped: clips over 15 minutes export video only.";
+  } else if (!info.audioTracks.length) {
+    note = "No audio track was found.";
+  } else {
+    onProgress({ phase: "audio", done: 0, total: 1 });
+    const audio = await audioTrack(file);
+    if (!audio || audio.numberOfChannels <= 0) {
+      note = "The audio track could not be decoded and was dropped.";
+    } else {
+      const codec = await pickAudioEncoder(audio.sampleRate, audio.numberOfChannels);
+      if (!codec) {
+        note = "This browser has no AAC or Opus encoder, so the clip exports without sound.";
+      } else {
+        prepared = await encodeAudio(audio, startAt, endAt, codec);
+        if (!prepared) {
+          note = "Audio could not be encoded and was dropped.";
+        } else if (codec === "opus") {
+          note = "Sound kept as Opus — this browser has no AAC encoder.";
+        }
+      }
+    }
+  }
+
   const target = new ArrayBufferTarget();
   const muxer = new Muxer({
     target,
@@ -319,6 +383,15 @@ export async function compressVideo(
       height,
       frameRate: Math.round(framerate),
     },
+    ...(prepared
+      ? {
+          audio: {
+            codec: prepared.codec,
+            numberOfChannels: prepared.numberOfChannels,
+            sampleRate: prepared.sampleRate,
+          },
+        }
+      : {}),
     fastStart: "in-memory",
     // H.264 with B-frames does not start at presentation time 0, and some
     // sources start at an arbitrary offset. Let the muxer shift the track so
@@ -337,7 +410,6 @@ export async function compressVideo(
   let codecError: unknown = null;
   let encoder: VideoEncoder | null = null;
   let decoder: VideoDecoder | null = null;
-  let note: string | undefined;
 
   // A codec that has already reported an error cannot be flushed, so every
   // break out of the pipeline has to surface that error instead of the
@@ -465,18 +537,11 @@ export async function compressVideo(
 
     onProgress({ phase: "video", done: keptSamples.length, total: keptSamples.length });
 
-    if (options.keepAudio && clipDuration < 900) {
-      onProgress({ phase: "audio", done: 0, total: 1 });
-      const audio = await audioTrack(file);
-      if (audio && audio.numberOfChannels > 0) {
-        note = await encodeAudio(muxer, audio, startAt, endAt).catch(
-          () => "Audio could not be re-encoded and was dropped."
-        );
-      } else {
-        note = "No audio track was found.";
-      }
-    } else if (!options.keepAudio) {
-      note = "Audio was left out: the switch is off.";
+    // The audio track was encoded up front; hand the buffered chunks to the
+    // muxer now that the video side is complete. Zero-copy: these are just
+    // references to already-compressed data.
+    if (prepared) {
+      for (const { chunk, meta } of prepared.chunks) muxer.addAudioChunk(chunk, meta);
     }
 
     onProgress({ phase: "mux", done: 0, total: 1 });
@@ -493,45 +558,65 @@ export async function compressVideo(
   }
 }
 
-type ChunkMuxer = Pick<Muxer<ArrayBufferTarget>, "addAudioChunk">;
+type PreparedAudio = {
+  codec: AudioCodec;
+  chunks: { chunk: EncodedAudioChunk; meta?: EncodedAudioChunkMetadata }[];
+  numberOfChannels: number;
+  sampleRate: number;
+};
 
+/** Opus only accepts a short list of rates (48 kHz being the common one); the
+ *  decoder hands back whatever the file used, so render up to the target rate. */
+async function resampleAudio(audio: AudioBuffer, targetRate: number): Promise<AudioBuffer> {
+  if (audio.sampleRate === targetRate) return audio;
+  const frames = Math.max(1, Math.ceil(audio.duration * targetRate));
+  const off = new OfflineAudioContext(audio.numberOfChannels, frames, targetRate);
+  const source = off.createBufferSource();
+  source.buffer = audio;
+  source.connect(off.destination);
+  source.start();
+  return await off.startRendering();
+}
+
+/**
+ * Trim, (re)sample and encode the whole soundtrack to compressed chunks,
+ * without touching the muxer. Returning `null` means "no audio" — the caller
+ * then declares no audio track at all, which is how a failed encode still
+ * produces a valid, silent MP4 instead of one with an empty track.
+ */
 async function encodeAudio(
-  muxer: ChunkMuxer,
   audio: AudioBuffer,
   startAt: number,
-  endAt: number
-): Promise<string | undefined> {
+  endAt: number,
+  codec: AudioCodec
+): Promise<PreparedAudio | null> {
   let encoder: AudioEncoder | null = null;
-  let dropped: string | undefined;
   try {
-    const channels = Math.min(2, audio.numberOfChannels);
+    const source = await resampleAudio(audio, codec === "opus" ? 48_000 : audio.sampleRate);
+    const sampleRate = source.sampleRate;
+    const channels = Math.min(2, source.numberOfChannels);
+    const chunks: PreparedAudio["chunks"] = [];
+
     encoder = new AudioEncoder({
-      output: (chunk, meta) => {
-        try {
-          muxer.addAudioChunk(chunk, meta);
-        } catch {
-          dropped = "Audio could not be muxed and was dropped.";
-        }
-      },
-      error: () => {
-        dropped = "Audio could not be encoded and was dropped.";
-      },
+      output: (chunk, meta) => chunks.push({ chunk, meta }),
+      // A mid-stream failure surfaces through flush() below; recording it here
+      // as well keeps partial output from being mistaken for success.
+      error: () => chunks.splice(0, chunks.length),
     });
     encoder.configure({
-      codec: "mp4a.40.2",
-      sampleRate: audio.sampleRate,
+      codec: codec === "opus" ? "opus" : "mp4a.40.2",
+      sampleRate,
       numberOfChannels: channels,
       bitrate: 128_000,
     });
 
     const chunkFrames = 4096;
-    const left = audio.getChannelData(0);
-    const right = channels > 1 ? audio.getChannelData(1) : left;
-    const fromFrame = Math.min(audio.length, Math.floor(startAt * audio.sampleRate));
-    const toFrame = Math.min(audio.length, Math.ceil(endAt * audio.sampleRate));
+    const left = source.getChannelData(0);
+    const right = channels > 1 ? source.getChannelData(1) : left;
+    const fromFrame = Math.min(source.length, Math.floor(startAt * sampleRate));
+    const toFrame = Math.min(source.length, Math.ceil(endAt * sampleRate));
 
     for (let offset = fromFrame; offset < toFrame; offset += chunkFrames) {
-      if (dropped) break;
       const frames = Math.min(chunkFrames, toFrame - offset);
       const planar = new Float32Array(frames * channels);
       planar.set(left.subarray(offset, offset + frames), 0);
@@ -539,10 +624,10 @@ async function encodeAudio(
 
       const data = new AudioData({
         format: "f32-planar",
-        sampleRate: audio.sampleRate,
+        sampleRate,
         numberOfFrames: frames,
         numberOfChannels: channels,
-        timestamp: ((offset - fromFrame) / audio.sampleRate) * 1_000_000,
+        timestamp: ((offset - fromFrame) / sampleRate) * 1_000_000,
         data: planar,
       });
       encoder.encode(data);
@@ -550,7 +635,9 @@ async function encodeAudio(
     }
 
     await encoder.flush();
-    return dropped;
+    return chunks.length ? { codec, chunks, numberOfChannels: channels, sampleRate } : null;
+  } catch {
+    return null;
   } finally {
     if (encoder && encoder.state !== "closed") encoder.close();
   }

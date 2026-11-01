@@ -16,9 +16,9 @@ import { IconArrow, IconDownload, IconVideo } from "@/components/icons";
 import { formatBytes, slug } from "@/lib/format";
 import { saveBlob } from "@/lib/zip";
 import {
-  canEncodeAac,
   canUseWebCodecs,
   compressVideo,
+  pickAudioEncoder,
   probeVideo,
   type VideoProbe,
 } from "@/lib/video";
@@ -112,7 +112,7 @@ export default function VideoTool() {
       setProbe(meta);
       setStart(0);
       setEnd(readDuration(meta) ?? 0);
-      setAudioOk(await canEncodeAac());
+      setAudioOk((await pickAudioEncoder()) !== null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not read this video");
     }
@@ -346,12 +346,13 @@ export default function VideoTool() {
           </label>
           {audioOk === false ? (
             <p className="mt-2 text-[12px] leading-snug text-error">
-              This browser cannot encode AAC here, so the clip is exported without sound. The video
-              still compresses; only the audio track is skipped.
+              This browser has no AAC or Opus encoder, so the clip is exported without sound. The
+              video still compresses; only the audio track is skipped.
             </p>
           ) : (
             <p className="mt-2 text-[12px] leading-snug text-muted">
-              Needs an AAC encoder in the browser. Without one the clip comes out silent.
+              Keeps the soundtrack — AAC where the browser has an encoder, Opus otherwise. Silence
+              only if it supports neither.
             </p>
           )}
         </div>
@@ -494,7 +495,7 @@ export default function VideoTool() {
             {(result.note || audioOk === false) && (
               <p className="mt-2 text-[12px] leading-snug text-ink-2">
                 {audioOk === false
-                  ? "This browser has no AAC encoder, so the exported clip has no audio track."
+                  ? "This browser has no audio encoder, so the exported clip has no audio track."
                   : result.note}
               </p>
             )}
