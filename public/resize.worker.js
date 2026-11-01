@@ -1,5 +1,5 @@
 /**
- * sizekit resize worker.
+ * Kilosmith resize worker.
  * Plain JS on purpose: it is served from /public so no bundler config can break it.
  *
  * In:  { jobId, file, presets: [{ id, w, h, fit, format }], options: { quality, background, focus } }
@@ -15,8 +15,9 @@ self.onmessage = async (event) => {
   const { jobId, file, presets, options } = event.data || {};
   if (!jobId || !file || !presets) return;
 
+  let bitmap = null;
   try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     const source = capSource(bitmap);
     const attention = buildAttention(source);
     const focus = options && options.focus;
@@ -40,7 +41,6 @@ self.onmessage = async (event) => {
       });
     }
 
-    if (typeof bitmap.close === "function" && source !== bitmap) bitmap.close();
     self.postMessage({ type: "done", jobId });
   } catch (error) {
     self.postMessage({
@@ -48,6 +48,9 @@ self.onmessage = async (event) => {
       jobId,
       message: error && error.message ? error.message : "Could not read this image",
     });
+  } finally {
+    // capSource already closed it when it rescaled; closing twice is a no-op.
+    bitmap?.close?.();
   }
 };
 
@@ -383,7 +386,7 @@ async function render(source, attention, preset, options, focus) {
   if (contain) {
     const transparent = type === "image/png" && (attention.useAlpha || (options && options.background === "transparent"));
     if (!transparent) {
-      ctx.fillStyle = (options && options.background) || "#0b0c0e";
+      ctx.fillStyle = (options && options.background) || "#ffffff";
       ctx.fillRect(0, 0, preset.w, preset.h);
     }
     const scale = Math.min(preset.w / source.width, preset.h / source.height);

@@ -19,9 +19,13 @@ export function buildIco(images: { size: number; png: Uint8Array }[]): Blob {
   view.setUint16(4, count, true);
 
   images.forEach((image, index) => {
+    if (!Number.isInteger(image.size) || image.size < 1 || image.size > 256) {
+      throw new Error(`ICO entries must be 1–256px, got ${image.size}`);
+    }
     const entry = header + index * 16;
-    view.setUint8(entry, image.size >= 256 ? 0 : image.size);
-    view.setUint8(entry + 1, image.size >= 256 ? 0 : image.size);
+    // The directory is one byte wide: 256 is written as 0 by convention.
+    view.setUint8(entry, image.size === 256 ? 0 : image.size);
+    view.setUint8(entry + 1, image.size === 256 ? 0 : image.size);
     view.setUint8(entry + 2, 0); // palette
     view.setUint8(entry + 3, 0); // reserved
     view.setUint16(entry + 4, 1, true); // color planes

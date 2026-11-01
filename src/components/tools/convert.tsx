@@ -1,7 +1,19 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button, DropZone, Field, Panel, Segmented, Spinner } from "@/components/ui";
+import {
+  Button,
+  DropZone,
+  Field,
+  IconButton,
+  MiniButton,
+  Panel,
+  Segmented,
+  Slider,
+  Spinner,
+  StatusTag,
+} from "@/components/ui";
 import { IconClose, IconDownload } from "@/components/icons";
 import {
   FORMATS,
@@ -14,7 +26,7 @@ import {
   type OutFormat,
 } from "@/lib/image";
 import { formatBytes, slug } from "@/lib/format";
-import { makeZip, saveBlob } from "@/lib/zip";
+import { makeZip, saveBlob, zipName } from "@/lib/zip";
 
 type Row = {
   id: string;
@@ -34,53 +46,81 @@ export default function ConvertTool() {
   const [supported, setSupported] = useState<Record<string, boolean>>({});
   const [zipping, setZipping] = useState(false);
   const rowsRef = useRef<Row[]>([]);
+  const settingsRef = useRef({ format, quality });
+  const runId = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const commit = (next: Row[]) => {
     rowsRef.current = next;
     setRows(next);
   };
 
+  /** Keep the ref in step with the state so a run always reads the current settings. */
+  function patchSettings(patch: Partial<{ format: OutFormat; quality: number }>) {
+    settingsRef.current = { ...settingsRef.current, ...patch };
+    if (patch.format !== undefined) setFormat(patch.format);
+    if (patch.quality !== undefined) setQuality(patch.quality);
+  }
+
   async function run() {
+    // A newer run cancels this one; the settings snapshot stops a run started before a
+    // format change from converting with the stale format via a closure.
+    const my = ++runId.current;
+    const { format: target, quality: targetQuality } = settingsRef.current;
+
     for (const row of [...rowsRef.current]) {
+      if (my !== runId.current) return;
       commit(
         rowsRef.current.map((entry) =>
           entry.id === row.id ? { ...entry, status: "working" } : entry
         )
       );
+
+      let bitmap: ImageBitmap | undefined;
       try {
-        const bitmap = await decodeImage(row.file);
+        bitmap = await decodeImage(row.file);
         const canvas = drawCover(
           bitmap,
           undefined,
-          format === "jpeg" || format === "avif" ? "#ffffff" : undefined
+          target === "jpeg" || target === "avif" ? "#ffffff" : undefined
         );
-        bitmap.close?.();
-        const blob = await toBlob(canvas, format, quality / 100);
-        if (row.out) URL.revokeObjectURL(row.out.url);
+        const blob = await toBlob(canvas, target, targetQuality / 100);
+        if (my !== runId.current) return;
+        const url = URL.createObjectURL(blob);
+        const current = rowsRef.current.find((entry) => entry.id === row.id);
+        if (!current) {
+          // The row was removed mid-run; nothing would ever revoke this URL.
+          URL.revokeObjectURL(url);
+          continue;
+        }
+        if (current.out) URL.revokeObjectURL(current.out.url);
         commit(
           rowsRef.current.map((entry) =>
             entry.id === row.id
               ? {
                   ...entry,
                   status: "done",
-                  out: { blob, url: URL.createObjectURL(blob), size: blob.size },
+                  out: { blob, url, size: blob.size },
                 }
               : entry
           )
         );
       } catch (error) {
+        if (my !== runId.current) return;
         commit(
-          rowsRef.current.map((entry) =>
-            entry.id === row.id
-              ? {
-                  ...entry,
-                  status: "error",
-                  out: undefined,
-                  error: error instanceof Error ? error.message : "Could not convert this file",
-                }
-              : entry
-          )
+          rowsRef.current.map((entry) => {
+            if (entry.id !== row.id) return entry;
+            if (entry.out) URL.revokeObjectURL(entry.out.url);
+            return {
+              ...entry,
+              status: "error",
+              out: undefined,
+              error: error instanceof Error ? error.message : "Could not convert this file",
+            };
+          })
         );
+      } finally {
+        bitmap?.close?.();
       }
     }
   }
@@ -104,6 +144,19 @@ export default function ConvertTool() {
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [format, quality]);
+
+  // The tool can sit mounted for a whole session, so on unmount cancel any in-flight run
+  // and hand back every object URL it still owns.
+  useEffect(
+    () => () => {
+      runId.current += 1;
+      for (const row of rowsRef.current) {
+        URL.revokeObjectURL(row.thumb);
+        if (row.out) URL.revokeObjectURL(row.out.url);
+      }
+    },
+    []
+  );
 
   function add(files: File[]) {
     const added: Row[] = files
@@ -131,15 +184,18 @@ export default function ConvertTool() {
 
   async function downloadAll() {
     const list = rowsRef.current.filter((row) => row.out);
-    if (!list.length) return;
+    if (!list.length || zipping) return;
     setZipping(true);
     try {
       const files: Record<string, Uint8Array> = {};
+      const used = new Set<string>();
       for (const row of list) {
         const blob = row.out!.blob;
-        files[`${slug(row.name)}.${extensionFor(blob)}`] = new Uint8Array(await blob.arrayBuffer());
+        files[zipName(used, `${slug(row.name)}.${extensionFor(blob)}`)] = new Uint8Array(
+          await blob.arrayBuffer()
+        );
       }
-      saveBlob(await makeZip(files), `sizekit-${format}.zip`);
+      saveBlob(await makeZip(files), `kilosmith-${format}.zip`);
     } finally {
       setZipping(false);
     }
@@ -147,7 +203,8 @@ export default function ConvertTool() {
 
   const totalOut = rows.reduce((sum, row) => sum + (row.out?.size ?? 0), 0);
   const info = formatInfo(format);
-  const missing = rows.filter((row) => row.status === "done" && row.out).length;
+  const doneCount = rows.filter((row) => row.status === "done" && row.out).length;
+  const progress = rows.length ? Math.round((doneCount / rows.length) * 100) : 0;
 
   return (
     <div>
@@ -155,8 +212,10 @@ export default function ConvertTool() {
         <DropZone
           onFiles={add}
           multiple
+          accent="bg-sky"
+          doodle="pick a new outfit"
           title="Drop images to convert"
-          hint="PNG, JPEG, WebP and AVIF, in bulk. Alpha is preserved where the format allows it."
+          hint="PNG, JPEG, WebP and AVIF, in bulk. Alpha is kept where the format allows it. Nothing leaves this tab."
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-[268px_minmax(0,1fr)]">
@@ -167,117 +226,126 @@ export default function ConvertTool() {
                   (entry) => ({ value: entry.value, label: entry.label })
                 )}
                 value={format}
-                onChange={(value) => setFormat(value as OutFormat)}
+                onChange={(value) => patchSettings({ format: value as OutFormat })}
               />
             </Field>
 
             {info.lossy && (
               <div className="mt-4">
-                <Field
+                <Slider
                   label="Quality"
-                  right={<span className="font-mono text-[10px] text-zinc-400">{quality}</span>}
-                >
-                  <input
-                    type="range"
-                    min={20}
-                    max={100}
-                    value={quality}
-                    onChange={(event) => setQuality(Number(event.target.value))}
-                    className="w-full"
-                  />
-                </Field>
+                  min={20}
+                  max={100}
+                  value={quality}
+                  onChange={(value) => patchSettings({ quality: value })}
+                />
               </div>
             )}
 
             {!info.alpha && (
-              <p className="mt-3 rounded-lg border border-line bg-ink px-2.5 py-2 text-[11px] leading-snug text-zinc-500">
-                {info.label} has no transparency — transparent pixels are composited on white.
+              <p className="mt-3 rounded-2xl border-2 border-ink bg-card px-2.5 py-2 text-[12.5px] leading-snug text-ink-2">
+                {info.label} has no transparency: transparent pixels are composited on white.
               </p>
             )}
 
-            <div className="mt-4 flex items-center justify-between border-t border-line pt-4">
-              <p className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
-                {missing}/{rows.length} done
-              </p>
-              <p className="font-mono text-[11px] text-zinc-400">{formatBytes(totalOut)}</p>
+            <div className="mt-4 hairline pt-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-[family-name:var(--font-display)] text-[13px] text-ink-2">
+                  {doneCount}/{rows.length} done
+                </p>
+                <p className="font-[family-name:var(--font-display)] text-[13px] text-ink tabular-nums">
+                  {formatBytes(totalOut)}
+                </p>
+              </div>
+              <div className="meter mt-2.5">
+                <div className="h-full bg-sky" style={{ width: `${progress}%` }} />
+              </div>
             </div>
 
             <Button className="mt-3 w-full" onClick={downloadAll} disabled={!totalOut || zipping}>
+              <IconDownload size={14} />
               {zipping ? "Packing…" : `Download all · ${formatBytes(totalOut)}`}
             </Button>
           </Panel>
 
-          <div className="order-1 min-w-0 space-y-2 md:order-2">
-            <div className="flex items-center justify-between rounded-lg border border-line bg-panel px-3 py-2">
-              <p className="font-mono text-[10.5px] text-zinc-500">
-                {rows.length} file{rows.length > 1 ? "s" : ""} → {info.label}
+          <div className="order-1 min-w-0 space-y-3 md:order-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-paper-2 px-2.5 py-2">
+              <p className="font-[family-name:var(--font-display)] text-[13.5px] text-ink-2">
+                {rows.length} file{rows.length > 1 ? "s" : ""} →{" "}
+                <span className="text-ink">{info.label}</span>
               </p>
-              <label className="cursor-pointer font-mono text-[10.5px] text-zinc-500 transition hover:text-acid">
-                + add
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(event) => {
-                    add(Array.from(event.target.files ?? []));
-                    event.target.value = "";
-                  }}
-                />
-              </label>
+              <MiniButton onClick={() => inputRef.current?.click()}>+ add more</MiniButton>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <input
+              ref={inputRef}
+              type="file"
+              aria-label="Add images to convert"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                add(Array.from(event.target.files ?? []));
+                event.target.value = "";
+              }}
+            />
+
+            <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
               {rows.map((row) => (
-                <div
-                  key={row.id}
-                  className="group overflow-hidden rounded-lg border border-line bg-panel"
-                >
-                  <div className="relative bg-checker" style={{ height: 120 }}>
+                <div key={row.id} className="tile">
+                  <div className="bg-checker relative" style={{ height: 120 }}>
                     {row.out ? (
                       <img
                         src={row.out.url}
                         alt={row.name}
                         className="h-full w-full object-contain"
                       />
+                    ) : row.status === "error" ? (
+                      <p
+                        title={row.error}
+                        className="flex h-full items-center justify-center px-2 text-center text-[12px] leading-snug text-error"
+                      >
+                        {row.error ?? "failed"}
+                      </p>
                     ) : (
                       <div className="flex h-full items-center justify-center">
-                        {row.status === "error" ? (
-                          <span
-                            title={row.error}
-                            className="max-w-full truncate px-2 font-mono text-[10px] text-red-400"
-                          >
-                            {row.error ?? "failed"}
-                          </span>
-                        ) : (
-                          <Spinner />
-                        )}
+                        <Spinner />
                       </div>
                     )}
-                    <button
-                      type="button"
+                    <IconButton
                       onClick={() => remove(row.id)}
-                      className="absolute right-1.5 top-1.5 rounded-md bg-ink/80 p-1 text-zinc-400 opacity-0 backdrop-blur transition group-hover:opacity-100"
-                      aria-label="Remove"
+                      label={`Remove ${row.name}`}
+                      className="absolute left-1.5 top-1.5"
                     >
                       <IconClose size={12} />
-                    </button>
+                    </IconButton>
+                    {row.out && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          saveBlob(
+                            row.out!.blob,
+                            `${slug(row.name)}.${extensionFor(row.out!.blob)}`
+                          )
+                        }
+                        aria-label={`Download ${row.name}`}
+                        title={`Download ${row.name}`}
+                        className="absolute right-1.5 top-1.5 grid size-7 place-items-center rounded-full border-2 border-ink bg-sky text-ink shadow-[2px_2px_0_var(--color-shadow)] transition-transform duration-150 hover:-translate-y-0.5 hover:rotate-6 active:translate-y-0.5 active:shadow-none"
+                      >
+                        <IconDownload size={12} />
+                      </button>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between gap-1 border-t border-line px-2 py-1.5">
-                    <span className="truncate font-mono text-[10px] text-zinc-500">
+                  <div className="tile-foot tile-foot-col">
+                    <div className="flex w-full items-center justify-between gap-1.5">
+                      <span className="min-w-0 truncate" title={row.name}>
+                        {row.name}
+                      </span>
+                      <StatusTag state={row.status} />
+                    </div>
+                    <span className="w-full whitespace-nowrap text-[11.5px] text-muted tabular-nums">
                       {formatBytes(row.size)} → {row.out ? formatBytes(row.out.size) : "…"}
                     </span>
-                    <button
-                      type="button"
-                      disabled={!row.out}
-                      onClick={() =>
-                        row.out && saveBlob(row.out.blob, `${slug(row.name)}.${extensionFor(row.out.blob)}`)
-                      }
-                      className="text-zinc-500 transition hover:text-acid disabled:opacity-30"
-                      aria-label="Download"
-                    >
-                      <IconDownload size={12} />
-                    </button>
                   </div>
                 </div>
               ))}

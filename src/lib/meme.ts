@@ -1,6 +1,6 @@
 /**
  * Meme rendering. Kept pure so the same code paints the on-screen preview and
- * the full-resolution export — the preview never has to be scaled up.
+ * the full-resolution export. The preview never has to be scaled up.
  */
 
 export type MemeFont = "impact" | "grotesk" | "serif" | "mono";

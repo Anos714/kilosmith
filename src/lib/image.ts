@@ -85,6 +85,10 @@ function loadAvifEncoder(): Promise<AvifEncoder> {
       }
       return encode;
     });
+    // A failed fetch must not be cached forever: drop it so the next try can reload.
+    avifEncoder.catch(() => {
+      avifEncoder = null;
+    });
   }
   return avifEncoder;
 }
@@ -135,19 +139,20 @@ export async function supportsFormat(format: OutFormat): Promise<boolean> {
 
 /**
  * Binary-search the encoder quality so the result lands under `targetBytes`.
- * Returns the best blob found and the quality that produced it.
+ * If nothing fits, the smallest encode found is returned with `met: false` so
+ * the UI can say so instead of quietly handing back the biggest file.
  */
 export async function encodeToTarget(
   canvas: HTMLCanvasElement,
   format: OutFormat,
   targetBytes: number
-): Promise<{ blob: Blob; quality: number }> {
+): Promise<{ blob: Blob; quality: number; met: boolean }> {
   let low = 0.25;
   let high = 0.98;
   let best = await toBlob(canvas, format, high);
   let bestQuality = high;
 
-  if (best.size <= targetBytes) return { blob: best, quality: high };
+  if (best.size <= targetBytes) return { blob: best, quality: high, met: true };
 
   for (let i = 0; i < 7; i++) {
     const quality = (low + high) / 2;
@@ -158,14 +163,12 @@ export async function encodeToTarget(
       low = quality;
     } else {
       high = quality;
+      if (blob.size < best.size) {
+        best = blob;
+        bestQuality = quality;
+      }
     }
   }
 
-  return { blob: best, quality: bestQuality };
-}
-
-export function sizeLabel(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return { blob: best, quality: bestQuality, met: best.size <= targetBytes };
 }

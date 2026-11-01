@@ -9,9 +9,20 @@ import {
   type FitMode,
   type Preset,
 } from "@/lib/presets";
-import { extensionOf, formatBytes, slug } from "@/lib/format";
-import { makeZip, saveBlob } from "@/lib/zip";
-import { FORMATS, supportsFormat, type OutFormat } from "@/lib/image";
+import { formatBytes, slug } from "@/lib/format";
+import { makeZip, saveBlob, zipName } from "@/lib/zip";
+import { FORMATS, extensionFor, supportsFormat, type OutFormat } from "@/lib/image";
+import {
+  Button,
+  Chip,
+  DropZone,
+  IconButton,
+  MiniButton,
+  Slider,
+  Segmented,
+  StatusTag,
+} from "@/components/ui";
+import { IconClose, IconDownload } from "@/components/icons";
 
 type Result = { presetId: string; blob: Blob; url: string; w: number; h: number };
 
@@ -40,7 +51,7 @@ const INITIAL: Settings = {
   format: "jpeg",
   fit: "crop",
   quality: 0.9,
-  background: "#0b0c0e",
+  background: "#ffffff",
 };
 
 function activePresets(settings: Settings): Preset[] {
@@ -50,9 +61,16 @@ function activePresets(settings: Settings): Preset[] {
 export default function ResizeTool() {
   const [settings, setSettings] = useState<Settings>(INITIAL);
   const [items, setItems] = useState<Item[]>([]);
-  const [dragging, setDragging] = useState(false);
   const [zipping, setZipping] = useState(false);
   const [supported, setSupported] = useState<Record<string, boolean>>({});
+
+  const settingsRef = useRef(settings);
+  const itemsRef = useRef<Item[]>([]);
+  const queueRef = useRef<Array<() => Promise<void>>>([]);
+  const runningRef = useRef(false);
+  const workersRef = useRef(new Map<string, () => void>());
+  const rerunTimer = useRef<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -67,15 +85,12 @@ export default function ResizeTool() {
     };
   }, []);
 
-  const settingsRef = useRef(settings);
-  const itemsRef = useRef<Item[]>([]);
-  const queueRef = useRef<Array<() => Promise<void>>>([]);
-  const runningRef = useRef(false);
-  const workersRef = useRef(new Map<string, () => void>());
-  const rerunTimer = useRef<number | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useInViewFade();
+  useEffect(
+    () => () => {
+      if (rerunTimer.current) window.clearTimeout(rerunTimer.current);
+    },
+    []
+  );
 
   function commit(next: Item[]) {
     itemsRef.current = next;
@@ -131,11 +146,22 @@ export default function ResizeTool() {
         if (settled) return;
         settled = true;
         worker.terminate();
-        workersRef.current.delete(itemId);
+        // Only drop the handle if it is still ours — a newer job may have replaced it.
+        if (workersRef.current.get(itemId) === finish) workersRef.current.delete(itemId);
         resolve();
       };
 
       workersRef.current.set(itemId, finish);
+
+      /** True while this exact job still owns the item. */
+      const isLive = () =>
+        !settled && itemsRef.current.some((item) => item.id === itemId && item.rev === rev);
+
+      const apply = (patch: (item: Item) => Item) => {
+        update((prev) =>
+          prev.map((item) => (item.id === itemId && item.rev === rev ? patch(item) : item))
+        );
+      };
 
       worker.onmessage = (event: MessageEvent) => {
         const data = event.data as {
@@ -150,6 +176,8 @@ export default function ResizeTool() {
         if (!data || data.jobId !== jobId) return;
 
         if (data.type === "result" && data.presetId && data.blob) {
+          // A removed or restarted item gets no object URL — nothing would revoke it.
+          if (!isLive()) return;
           const url = URL.createObjectURL(data.blob);
           update((prev) =>
             prev.map((item) =>
@@ -171,32 +199,20 @@ export default function ResizeTool() {
             )
           );
         } else if (data.type === "error") {
-          update((prev) =>
-            prev.map((item) =>
-              item.id === itemId && item.rev === rev
-                ? { ...item, status: "error", error: data.message ?? "Render failed" }
-                : item
-            )
-          );
+          apply((item) => ({ ...item, status: "error", error: data.message ?? "Render failed" }));
           finish();
         } else if (data.type === "done") {
-          update((prev) =>
-            prev.map((item) =>
-              item.id === itemId && item.rev === rev ? { ...item, status: "done" } : item
-            )
-          );
+          apply((item) => ({ ...item, status: "done" }));
           finish();
         }
       };
 
       worker.onerror = () => {
-        update((prev) =>
-          prev.map((item) =>
-            item.id === itemId && item.rev === rev
-              ? { ...item, status: "error", error: "This browser could not decode the file" }
-              : item
-          )
-        );
+        apply((item) => ({
+          ...item,
+          status: "error",
+          error: "This browser could not decode the file",
+        }));
         finish();
       };
 
@@ -210,7 +226,11 @@ export default function ResizeTool() {
           fit: config.fit,
           format: preset.format ?? config.format,
         })),
-        options: { quality: config.quality, background: config.background, focus },
+        options: {
+          quality: Math.min(1, Math.max(0.1, config.quality)),
+          background: config.background,
+          focus,
+        },
       });
     });
   }
@@ -309,7 +329,10 @@ export default function ResizeTool() {
   }
 
   function downloadOne(item: Item, result: Result) {
-    saveBlob(result.blob, `${slug(item.name)}-${result.presetId}-${result.w}x${result.h}.${extensionOf(result.blob)}`);
+    saveBlob(
+      result.blob,
+      `${slug(item.name)}-${result.presetId}-${result.w}x${result.h}.${extensionFor(result.blob)}`
+    );
   }
 
   async function downloadAll() {
@@ -319,22 +342,29 @@ export default function ResizeTool() {
     setZipping(true);
     try {
       const zip: Record<string, Uint8Array> = {};
+      const used = new Set<string>();
       const multiple = list.length > 1;
       for (const item of list) {
         const folder = multiple ? `${slug(item.name)}/` : "";
         for (const result of Object.values(item.results)) {
-          zip[`${folder}${result.presetId}-${result.w}x${result.h}.${extensionOf(result.blob)}`] =
-            new Uint8Array(await result.blob.arrayBuffer());
+          const name = zipName(
+            used,
+            `${folder}${result.presetId}-${result.w}x${result.h}.${extensionFor(result.blob)}`
+          );
+          zip[name] = new Uint8Array(await result.blob.arrayBuffer());
         }
       }
       const blob = await makeZip(zip);
-      saveBlob(blob, multiple ? "sizekit-batch.zip" : `sizekit-${slug(list[0].name)}.zip`);
+      saveBlob(blob, multiple ? "kilosmith-batch.zip" : `kilosmith-${slug(list[0].name)}.zip`);
     } finally {
       setZipping(false);
     }
   }
 
+  // Paste only means "start a batch" while the dropzone is on screen; otherwise
+  // every ⌘V in the text fields below would silently add the clipboard image.
   useEffect(() => {
+    if (items.length) return;
     function onPaste(event: ClipboardEvent) {
       const files = Array.from(event.clipboardData?.files ?? []);
       if (files.length) addFiles(files);
@@ -342,7 +372,7 @@ export default function ResizeTool() {
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [items.length]);
 
   const selectedPresets = PRESETS.filter((preset) => settings.selected.includes(preset.id));
   const finished = items.flatMap((item) => Object.values(item.results));
@@ -352,32 +382,24 @@ export default function ResizeTool() {
   return (
     <div className="w-full">
       {items.length === 0 ? (
-        <Dropzone
-          dragging={dragging}
-          onOpen={() => inputRef.current?.click()}
-          onDrop={(files) => addFiles(files)}
-          onDragState={setDragging}
+        <DropZone
+          onFiles={addFiles}
+          multiple
+          accent="bg-sun"
+          doodle="plop it here"
+          title="Drop an image, or click to browse"
+          hint="JPG, PNG, WebP or AVIF — up to 18 sizes each. Or just paste with ⌘V. Nothing is uploaded; it all happens in this tab."
         />
       ) : (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-panel px-3 py-2.5">
-          <p className="font-mono text-[11px] tracking-wide text-zinc-500">
-            {items.length} image{items.length > 1 ? "s" : ""} · {finished.length}/{totalExpected} sizes
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-paper-2 px-2.5 py-2">
+          <p className="font-[family-name:var(--font-display)] text-[13.5px] text-ink-2">
+            {items.length} photo{items.length > 1 ? "s" : ""} ·{" "}
+            <span className="text-ink">{finished.length}</span>
+            /{totalExpected} sizes squished
           </p>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="rounded-md border border-line px-2.5 py-1.5 font-mono text-[11px] text-zinc-300 transition hover:border-zinc-600 hover:text-white"
-            >
-              + add
-            </button>
-            <button
-              type="button"
-              onClick={reset}
-              className="rounded-md border border-transparent px-2.5 py-1.5 font-mono text-[11px] text-zinc-500 transition hover:text-zinc-200"
-            >
-              clear
-            </button>
+            <MiniButton onClick={() => inputRef.current?.click()}>+ add one</MiniButton>
+            <MiniButton onClick={reset}>clear all</MiniButton>
           </div>
         </div>
       )}
@@ -385,6 +407,7 @@ export default function ResizeTool() {
       <input
         ref={inputRef}
         type="file"
+        aria-label="Add photos to resize"
         accept="image/*"
         multiple
         className="hidden"
@@ -395,64 +418,48 @@ export default function ResizeTool() {
       />
 
       {items.length > 0 && (
-        <div className="mt-4 grid gap-4 md:grid-cols-[272px_minmax(0,1fr)]">
+        <div className="grid gap-4 md:grid-cols-[272px_minmax(0,1fr)]">
           <aside className="order-2 md:order-1 md:sticky md:top-6 md:self-start">
-            <div className="rounded-xl border border-line bg-panel p-4">
-              <div className="flex items-center justify-between">
-                <h2 className="font-mono text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+            <div className="pane p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-[family-name:var(--font-display)] text-[15px] font-semibold text-ink">
                   Sizes
-                </h2>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => patchSettings({ selected: PRESETS.map((p) => p.id) })}
-                    className="font-mono text-[10px] text-zinc-500 transition hover:text-acid"
-                  >
+                </p>
+                <div className="flex gap-1.5">
+                  <MiniButton onClick={() => patchSettings({ selected: PRESETS.map((p) => p.id) })}>
                     all
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => patchSettings({ selected: DEFAULT_SELECTION })}
-                    className="font-mono text-[10px] text-zinc-500 transition hover:text-acid"
-                  >
+                  </MiniButton>
+                  <MiniButton onClick={() => patchSettings({ selected: DEFAULT_SELECTION })}>
                     reset
-                  </button>
+                  </MiniButton>
                 </div>
               </div>
 
-              <div className="mt-3 space-y-3">
+              <div className="mt-3 space-y-3.5">
                 {GROUPS.map((group) => (
                   <div key={group.id}>
-                    <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-zinc-600">
+                    <p className="mb-1.5 font-[family-name:var(--font-display)] text-[12.5px] font-medium uppercase tracking-[0.1em] text-accent-deep">
                       {group.label}
                     </p>
                     <div className="flex flex-wrap gap-1.5">
-                      {PRESETS.filter((preset) => preset.group === group.id).map((preset) => {
-                        const on = settings.selected.includes(preset.id);
-                        return (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => togglePreset(preset.id)}
-                            title={`${preset.label} · ${preset.w}×${preset.h}`}
-                            className={`rounded-md border px-2 py-1 font-mono text-[10px] transition ${
-                              on
-                                ? "border-acid/40 bg-acid/10 text-acid"
-                                : "border-line text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
-                            }`}
-                          >
-                            {preset.label}
-                          </button>
-                        );
-                      })}
+                      {PRESETS.filter((preset) => preset.group === group.id).map((preset) => (
+                        <Chip
+                          key={preset.id}
+                          active={settings.selected.includes(preset.id)}
+                          onClick={() => togglePreset(preset.id)}
+                          title={`${preset.label} · ${preset.w}×${preset.h}`}
+                        >
+                          {preset.label}
+                        </Chip>
+                      ))}
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-5 space-y-4 border-t border-line pt-4">
+              <div className="mt-5 space-y-4 hairline pt-4">
                 <div>
-                  <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-zinc-600">
+                  <p className="mb-2 font-[family-name:var(--font-display)] text-[15px] font-semibold text-ink">
                     Fit
                   </p>
                   <Segmented
@@ -463,85 +470,68 @@ export default function ResizeTool() {
                     value={settings.fit}
                     onChange={(value) => patchSettings({ fit: value as FitMode })}
                   />
-                  <p className="mt-1.5 text-[11px] leading-snug text-zinc-600">
+                  <p className="mt-1.5 text-[12.5px] leading-snug text-muted">
                     {settings.fit === "crop"
                       ? "Finds the busiest part of the photo so faces stay in frame."
-                      : "Keeps the whole photo and fills the edges with a color."}
-                  </p>
-                  <p className="mt-1 text-[11px] leading-snug text-zinc-700">
-                    Cut-outs with transparency are fitted, never cropped.
+                      : "Keeps the whole photo and fills the leftover space with a colour."}
+                    Cut-outs with transparency are always fitted, never cropped.
                   </p>
                 </div>
 
                 <div>
-                  <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-zinc-600">
+                  <p className="mb-2 font-[family-name:var(--font-display)] text-[15px] font-semibold text-ink">
                     Format
                   </p>
                   <Segmented
-                    options={FORMATS.filter((entry) => entry.value !== "avif" && supported[entry.value] !== false).map(
-                      (entry) => ({ value: entry.value, label: entry.label })
-                    )}
+                    options={FORMATS.filter(
+                      (entry) => entry.value !== "avif" && supported[entry.value] !== false
+                    ).map((entry) => ({ value: entry.value, label: entry.label }))}
                     value={settings.format}
                     onChange={(value) => patchSettings({ format: value as OutFormat })}
                   />
-                  <p className="mt-1.5 text-[11px] leading-snug text-zinc-600">
+                  <p className="mt-1.5 text-[12.5px] leading-snug text-muted">
                     Icons always export as PNG.
                   </p>
                 </div>
 
                 {settings.format !== "png" && (
-                  <div>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <p className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
-                        Quality
-                      </p>
-                      <span className="font-mono text-[10px] text-zinc-400">
-                        {Math.round(settings.quality * 100)}
-                      </span>
-                    </div>
+                  <Slider
+                    label="Quality"
+                    min={60}
+                    max={100}
+                    value={Math.round(settings.quality * 100)}
+                    display={`${Math.round(settings.quality * 100)}`}
+                    onChange={(value) =>
+                      patchSettings({ quality: Math.min(1, Math.max(0.1, value / 100)) })
+                    }
+                  />
+                )}
+
+                {settings.fit === "pad" && (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-[family-name:var(--font-display)] text-[14px] font-medium text-ink-2">
+                      Padding colour
+                    </p>
                     <input
-                      type="range"
-                      min={0.6}
-                      max={1}
-                      step={0.02}
-                      value={settings.quality}
-                      onChange={(event) => patchSettings({ quality: Number(event.target.value) })}
-                      className="w-full"
+                      type="color"
+                      aria-label="Padding colour"
+                      value={settings.background}
+                      onChange={(event) => patchSettings({ background: event.target.value })}
+                      className="h-8 w-12"
                     />
                   </div>
                 )}
 
-                {settings.fit === "pad" && (
-                  <div className="flex items-center justify-between">
-                    <p className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
-                      Padding
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[10px] text-zinc-500">
-                        {settings.background}
-                      </span>
-                      <input
-                        type="color"
-                        value={settings.background}
-                        onChange={(event) => patchSettings({ background: event.target.value })}
-                        className="h-7 w-9 cursor-pointer rounded border border-line bg-transparent"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  type="button"
+                <Button
+                  className="w-full"
                   onClick={downloadAll}
                   disabled={!finished.length || zipping}
-                  className="w-full rounded-lg bg-acid px-3 py-2.5 text-[13px] font-semibold text-ink transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-line disabled:text-zinc-500"
                 >
-                  {zipping
-                    ? "Packing…"
-                    : `Download all ${finished.length ? `· ${formatBytes(totalBytes)}` : ""}`}
-                </button>
-                <p className="text-center font-mono text-[10px] text-zinc-600">
-                  ZIP · stored, not re-compressed
+                  <IconDownload size={14} />
+                  {zipping ? "Packing…" : `Download all · ${formatBytes(totalBytes)}`}
+                </Button>
+                <p className="text-center text-[12px] text-muted">
+                  ZIP · stored, not re-compressed · {finished.length} files
                 </p>
               </div>
             </div>
@@ -565,52 +555,6 @@ export default function ResizeTool() {
   );
 }
 
-function Dropzone({
-  dragging,
-  onOpen,
-  onDrop,
-  onDragState,
-}: {
-  dragging: boolean;
-  onOpen: () => void;
-  onDrop: (files: FileList | File[]) => void;
-  onDragState: (value: boolean) => void;
-}) {
-  return (
-    <div
-      onClick={onOpen}
-      onDragOver={(event) => {
-        event.preventDefault();
-        onDragState(true);
-      }}
-      onDragLeave={() => onDragState(false)}
-      onDrop={(event) => {
-        event.preventDefault();
-        onDragState(false);
-        onDrop(event.dataTransfer.files);
-      }}
-      className={`group relative cursor-pointer overflow-hidden rounded-2xl border border-dashed px-6 py-14 text-center transition sm:py-20 ${
-        dragging ? "border-acid/70 bg-acid/[0.04]" : "border-line bg-panel hover:border-zinc-600"
-      }`}
-    >
-      <div className="pointer-events-none absolute inset-0 glow" />
-      <div className="relative mx-auto flex max-w-md flex-col items-center gap-3">
-        <div className="flex size-11 items-center justify-center rounded-xl border border-line bg-ink text-acid">
-          <UploadIcon />
-        </div>
-        <p className="text-[15px] font-medium text-zinc-200">
-          Drop an image, or click to browse
-        </p>
-        <p className="font-mono text-[11px] leading-relaxed text-zinc-500">
-          JPG · PNG · WebP · AVIF — or just paste with ⌘V
-          <br />
-          <span className="text-zinc-600">Nothing is uploaded. Everything runs in this tab.</span>
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function ItemCard({
   item,
   presets,
@@ -627,50 +571,34 @@ function ItemCard({
   const [adjusting, setAdjusting] = useState(false);
   const results = Object.values(item.results);
   const done = results.length >= presets.length;
+  const state = item.status === "error" ? "error" : done ? "done" : "working";
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-panel">
-      <div className="flex items-center gap-3 border-b border-line px-3 py-2.5">
-        <div className="size-8 shrink-0 overflow-hidden rounded-md border border-line bg-checker">
+    <div className="pop-sm overflow-hidden bg-card">
+      <div className="flex flex-wrap items-center gap-3 bg-paper-2 px-3 py-2.5">
+        <div className="thumb size-10 shrink-0">
           <img src={item.thumb} alt="" className="h-full w-full object-cover" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] text-zinc-300">{item.name}</p>
-          <p className="font-mono text-[10px] text-zinc-600">
+          <p className="truncate font-[family-name:var(--font-display)] text-[14.5px] font-medium text-ink">
+            {item.name}
+          </p>
+          <p className="text-[12.5px] text-muted tabular-nums">
             {formatBytes(item.file.size)} in · {results.length}/{presets.length} out
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setAdjusting((value) => !value)}
-          className={`rounded-md border px-2 py-1 font-mono text-[10px] transition ${
-            adjusting || item.focus
-              ? "border-acid/40 text-acid"
-              : "border-line text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
-          }`}
-        >
-          {item.focus ? "focused" : "crop"}
-        </button>
-        <span
-          className={`font-mono text-[10px] ${
-            item.status === "error" ? "text-red-400" : done ? "text-acid" : "text-zinc-500"
-          }`}
-        >
-          {item.status === "error" ? "failed" : done ? "ready" : "rendering"}
-        </span>
-        <button
-          type="button"
-          onClick={() => onRemove(item.id)}
-          aria-label="Remove image"
-          className="rounded p-1 text-zinc-600 transition hover:bg-line hover:text-zinc-300"
-        >
-          <CloseIcon />
-        </button>
+        <StatusTag state={state} text={item.status === "error" ? "failed" : undefined} />
+        <MiniButton onClick={() => setAdjusting((value) => !value)} active={adjusting || !!item.focus}>
+          {item.focus ? "pinned" : "crop"}
+        </MiniButton>
+        <IconButton onClick={() => onRemove(item.id)} label={`Remove ${item.name}`}>
+          <IconClose size={12} />
+        </IconButton>
       </div>
 
       {adjusting && (
-        <div className="border-b border-line p-2.5">
-          <div className="relative overflow-hidden rounded-lg border border-line">
+        <div className="border-t-2 border-ink/10 p-3">
+          <div className="thumb relative">
             <img
               src={item.thumb}
               alt="Pick a focal point"
@@ -686,39 +614,36 @@ function ItemCard({
             />
             {item.focus && (
               <span
-                className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-acid bg-ink/50 shadow-[0_0_0_6px_rgba(216,255,62,0.15)]"
+                className="pointer-events-none absolute grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-ink bg-accent shadow-[2px_2px_0_var(--color-shadow)]"
                 style={{ left: `${item.focus.x * 100}%`, top: `${item.focus.y * 100}%` }}
-              />
+                aria-hidden
+              >
+                <span className="size-1.5 rounded-full bg-ink" />
+              </span>
             )}
           </div>
           <div className="mt-2 flex items-center justify-between gap-3">
-            <p className="font-mono text-[10px] text-zinc-600">
-              click where the subject is — every size re-crops around it
+            <p className="text-[12.5px] text-muted">
+              Click on the subject — every size re-crops around your pin.
             </p>
-            <button
-              type="button"
-              onClick={() => onFocus(item.id)}
-              disabled={!item.focus}
-              className="shrink-0 font-mono text-[10px] text-zinc-500 transition hover:text-acid disabled:text-zinc-700"
-            >
-              auto
-            </button>
+            <MiniButton onClick={() => onFocus(item.id)} disabled={!item.focus}>
+              let the robot decide
+            </MiniButton>
           </div>
         </div>
       )}
 
       {item.error ? (
-        <p className="px-3 py-4 text-[12px] text-red-300/90">{item.error} — try a JPG or PNG.</p>
+        <p className="px-4 py-4 text-[13px] text-error">
+          {item.error}. A JPG or PNG usually behaves better.
+        </p>
       ) : (
-        <div className="grid grid-cols-2 gap-2 p-2.5 sm:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 p-3 lg:grid-cols-3 xl:grid-cols-4">
           {presets.map((preset) => {
             const result = item.results[preset.id];
             return (
-              <div
-                key={preset.id}
-                className="group relative overflow-hidden rounded-lg border border-line bg-ink"
-              >
-                <div className="relative bg-ink" style={{ height: 118 }}>
+              <div key={preset.id} className="tile">
+                <div className="bg-checker relative" style={{ height: 118 }}>
                   {result ? (
                     <img
                       src={result.url}
@@ -727,7 +652,7 @@ function ItemCard({
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center">
-                      <span className="size-2 animate-pulse rounded-full bg-acid/50" />
+                      <span className="sticker animate-pulse bg-paper text-[11px]">cooking…</span>
                     </div>
                   )}
                   {result && (
@@ -735,18 +660,20 @@ function ItemCard({
                       type="button"
                       onClick={() => onDownload(item, result)}
                       aria-label={`Download ${preset.label}`}
-                      className="absolute right-1.5 top-1.5 rounded-md border border-white/10 bg-ink/80 p-1.5 text-zinc-300 opacity-0 backdrop-blur transition group-hover:opacity-100 hover:text-acid"
+                      title={`Download ${preset.label}`}
+                      className="absolute right-1.5 top-1.5 grid size-7 place-items-center rounded-full border-2 border-ink bg-sun text-ink shadow-[2px_2px_0_var(--color-shadow)] transition-transform duration-150 hover:-translate-y-0.5 hover:rotate-6 active:translate-y-0.5 active:shadow-none"
                     >
-                      <DownloadIcon />
+                      <IconDownload size={12} />
                     </button>
                   )}
                 </div>
-                <div className="flex items-center justify-between gap-1 border-t border-line px-2 py-1.5">
-                  <span className="truncate font-mono text-[10px] text-zinc-500">
-                    {preset.w}×{preset.h}
+                <div className="tile-foot tile-foot-col">
+                  <span className="w-full truncate" title={preset.label}>
+                    {preset.label}
                   </span>
-                  <span className="shrink-0 font-mono text-[10px] text-zinc-600">
-                    {result ? formatBytes(result.blob.size) : "…"}
+                  <span className="text-[11.5px] text-muted">
+                    {preset.w}×{preset.h}
+                    {result ? ` · ${formatBytes(result.blob.size)}` : " · …"}
                   </span>
                 </div>
               </div>
@@ -758,78 +685,3 @@ function ItemCard({
   );
 }
 
-function Segmented({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="flex w-fit rounded-md border border-line p-0.5">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={`rounded px-3 py-1 font-mono text-[10px] transition ${
-            value === option.value
-              ? "bg-line text-zinc-100"
-              : "text-zinc-500 hover:text-zinc-300"
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Tiny scroll reveal, no dependencies. */
-function useInViewFade() {
-  useEffect(() => {
-    const nodes = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
-    if (!nodes.length) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("reveal-in");
-            observer.unobserve(entry.target);
-          }
-        }
-      },
-      { rootMargin: "-8% 0px" }
-    );
-    nodes.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
-  }, []);
-}
-
-function UploadIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 16V4m0 0L7 9m5-5 5 5" />
-      <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-    </svg>
-  );
-}
-
-function DownloadIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 4v12m0 0 4.5-4.5M12 16l-4.5-4.5" />
-      <path d="M4 20h16" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M6 6l12 12M18 6 6 18" />
-    </svg>
-  );
-}
