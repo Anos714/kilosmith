@@ -59,7 +59,8 @@ JPEG output is composited on white.
 
 ### Video
 Compress MP4 and MOV in the browser with WebCodecs. Trim in/out points, choose quality,
-cap resolution (source, 1080p, 720p, 480p) and keep or drop audio (AAC). The clip is
+cap resolution (source, 1080p, 720p, 480p) and keep or drop audio (AAC, with an Opus
+fallback in browsers that have no AAC encoder — so the soundtrack survives). The clip is
 decoded from the nearest keyframe, frames outside the trim range are dropped, timestamps
 are shifted, and the audio buffer is sliced to match. No ffmpeg.wasm, no upload, no server.
 
@@ -68,7 +69,7 @@ Turn a sequence of stills into a looping GIF with a per-frame delay, a width cap
 palette size of 64, 128 or 256 colours. Frames can be reordered.
 
 ### Meme
-100 built-in templates shipped with the app, or drop your own photo. Up to six captions,
+200 built-in templates shipped with the app, or drop your own photo. Up to six captions,
 each independently draggable with its own font, case, fill, outline and auto-fit size; the
 renderer is shared by the preview and the full-resolution export. Search and tag filters
 find a template fast. Exports PNG or JPG, or copies to the clipboard. Template images are
