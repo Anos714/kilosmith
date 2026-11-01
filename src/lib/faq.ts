@@ -1,6 +1,6 @@
 export const faq = [
   {
-    question: "Is sizekit really free?",
+    question: "Is Kilosmith really free?",
     answer:
       "Yes. All eight tools are free, with no account, no watermark and no file limit. Every file is processed on your own device, so there is no server bill to pass on to you.",
   },
@@ -12,7 +12,7 @@ export const faq = [
   {
     question: "How does the video compressor work without a server?",
     answer:
-      "sizekit decodes the clip with WebCodecs, re-renders each frame into a canvas and encodes it again at the bitrate you chose, then writes a fresh MP4 with mp4-muxer. It is the same thing ffmpeg would do, using the hardware encoder you already own.",
+      "Kilosmith decodes the clip with WebCodecs, re-renders each frame into a canvas and encodes it again at the bitrate you chose, then writes a fresh MP4 with mp4-muxer. It is the same thing ffmpeg would do, using the hardware encoder you already own.",
   },
   {
     question: "Why is video slower than image compression?",
@@ -27,27 +27,27 @@ export const faq = [
   {
     question: "Can I use the output commercially?",
     answer:
-      "Yes. Your files stay yours: no attribution, no licence, no upload. Compress a client video, export a meme, ship a favicon — it is all yours.",
+      "Yes. Your files stay yours: no attribution, no licence, no upload. Compress a client video, export a meme, ship a favicon: it is all yours.",
   },
   {
-    question: "Does sizekit use analytics or cookies?",
+    question: "Does Kilosmith use analytics or cookies?",
     answer:
-      "No analytics, no tracking pixels and no advertising cookies. The only cookie-sized thing on this site is the theme, and there isn't even that — everything is local state.",
+      "No analytics, no tracking pixels and no advertising cookies. The only cookie-sized thing on this site is the theme, and there isn't even that. Everything is local state.",
   },
   {
     question: "Is the AVIF really AVIF?",
     answer:
-      "Yes. Almost no browser can encode AVIF from a canvas, so sizekit ships a small WebAssembly AVIF encoder and loads it only when you pick AVIF. The trade-off is speed and transparency: an AVIF takes longer than a WebP, and transparent pixels are composited on white because this encoder has no alpha channel.",
+      "Yes. Almost no browser can encode AVIF from a canvas, so Kilosmith ships a small WebAssembly AVIF encoder and loads it only when you pick AVIF. The trade-off is speed and transparency: an AVIF takes longer than a WebP, and transparent pixels are composited on white because this encoder has no alpha channel.",
   },
   {
     question: "Where do the meme templates come from?",
     answer:
-      "The 100 templates are fetched once from Imgflip's public catalogue, re-encoded to WebP and shipped with the app, so they load from this site and work offline. Rights stay with each image's owner — see the credits file. Dropping your own photo uses the same editor and never leaves your device.",
+      "The 100 templates are fetched once from Imgflip's public catalogue, re-encoded to WebP and shipped with the app, so they load from this site and work offline. Rights stay with each image's owner. See the credits file. Dropping your own photo uses the same editor and never leaves your device.",
   },
   {
     question: "Why do some HEIC files fail to open?",
     answer:
-      "HEIC is Apple's format. Safari decodes it, Chrome does not yet. If a photo will not load, export it as JPEG from Photos first — sizekit will happily process that.",
+      "HEIC is Apple's format. Safari decodes it, Chrome does not yet. If a photo will not load, export it as JPEG from Photos first; Kilosmith will happily process that.",
   },
   {
     question: "Does it work offline?",
