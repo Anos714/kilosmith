@@ -1,148 +1,420 @@
+/* Kilosmith · the friendly file-squisher · candy-brutalist theme
+ * shape: toy console · nav: sticky sticker bar · footer: sticker sheet
+ * palette: sherbet on cream · type: Fredoka display + Mona Sans body
+ * signature: hard ink shadows, fat outlines, things that boing */
 @import "tailwindcss";
+@import "./tokens.css";
+@import "./base.css" layer(base);
 
-@theme {
-  --color-ink: #08090b;
-  --color-panel: #0c0e11;
-  --color-panel-2: #11141a;
-  --color-line: #1c1f25;
-  --color-line-2: #2a2e36;
-  --color-acid: #d8ff3e;
-  --color-acid-dim: #b6d92f;
-  --color-muted: #8b929e;
+/* Dark mode is a class on <html>, not an OS mood ring: the toggle has to win. */
+@custom-variant dark (&:where(.dark, .dark *));
 
-  /* The stock zinc-500/600/700 ramp drops below 4.5:1 on this near-black
-     background, which fails WCAG AA for body copy and the small mono labels.
-     These three keep the same visual order but stay readable. */
-  --color-zinc-500: #9aa1ab;
-  --color-zinc-600: #868d97;
-  --color-zinc-700: #767d87;
-
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
-  --font-serif: var(--font-instrument), ui-serif, Georgia, serif;
-
-  --radius-card: 14px;
+/* ------------------------------------------------------------------ layout */
+.wordmark {
+  padding-inline: var(--gutter);
 }
 
-html {
-  color-scheme: dark;
-  scroll-behavior: smooth;
-  -webkit-tap-highlight-color: transparent;
-}
-
-body {
-  background-color: var(--color-ink);
-  color: #e9ebef;
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-
-::selection {
-  background: var(--color-acid);
-  color: #08090b;
-}
-
-:focus-visible {
-  outline: 2px solid var(--color-acid);
-  outline-offset: 2px;
-}
-
-.dotted {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(to bottom, black, transparent 78%);
-}
-
-@utility bg-checker {
-  background-color: #0f1114;
-  background-image:
-    linear-gradient(45deg, #16191e 25%, transparent 25%),
-    linear-gradient(-45deg, #16191e 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #16191e 75%),
-    linear-gradient(-45deg, transparent 75%, #16191e 75%);
-  background-size: 16px 16px;
-  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-}
-
-@utility glow {
-  background-image: radial-gradient(
-    55% 60% at 50% 0%,
-    rgba(216, 255, 62, 0.1) 0%,
-    rgba(216, 255, 62, 0) 100%
-  );
-}
-
-.reveal {
-  opacity: 0;
-  transform: translateY(10px);
-  transition:
-    opacity 0.55s cubic-bezier(0.2, 0.7, 0.2, 1),
-    transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-.reveal-in {
-  opacity: 1;
-  transform: none;
-}
-
+/* The sign-off: one word, scaled to the page width, sunk just below the rule. */
 .wordmark::after {
   content: attr(data-name);
   display: block;
   text-align: center;
-  font-size: clamp(4rem, 19vw, 15rem);
-  font-weight: 600;
-  line-height: 0.8;
-  letter-spacing: -0.06em;
-  color: rgb(244 244 245 / 0.07);
-  transform: translateY(8%);
+  font-family: var(--font-display);
+  font-size: clamp(3.25rem, 18.5vw, 22rem);
+  font-weight: var(--display-weight);
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+  color: color-mix(in oklab, var(--color-ink) 9%, transparent);
+  -webkit-text-stroke: 2px color-mix(in oklab, var(--color-ink) 18%, transparent);
+  white-space: nowrap;
+}
+
+.settle {
+  animation: settle var(--dur-long) var(--ease-out) both;
+}
+@keyframes settle {
+  from { opacity: 0.5; transform: translateY(6px); }
+}
+
+/* ------------------------------------------------------------- toy surfaces */
+@layer components {
+  .pop {
+    border: 2.5px solid var(--color-ink);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .pop-sm {
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-stock);
+    box-shadow: var(--shadow-pop);
+  }
+
+  .sticker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.85rem;
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-pill);
+    background: var(--color-card);
+    box-shadow: var(--shadow-pop-sm);
+    font-family: var(--font-sticker);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .marker {
+    position: relative;
+    display: inline-block;
+    z-index: 1;
+    padding-inline: 0.06em;
+  }
+  .marker::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0.06em -0.06em 0.02em;
+    border-radius: 12px;
+    background: var(--color-sun);
+    transform: rotate(-1.4deg);
+  }
+
+  .tape {
+    position: absolute;
+    width: 108px;
+    height: 30px;
+    background: color-mix(in oklab, var(--color-butter) 78%, transparent);
+    border-inline: 1px dashed color-mix(in oklab, var(--color-ink) 22%, transparent);
+    box-shadow: 0 1px 0 color-mix(in oklab, var(--color-ink) 8%, transparent);
+    transform: rotate(-4deg);
+  }
+
+  .doodle-underline {
+    background-image: repeating-linear-gradient(
+      -8deg,
+      var(--color-accent) 0 6px,
+      transparent 6px 14px
+    );
+    background-repeat: no-repeat;
+    background-position: 0 100%;
+    background-size: 100% 8px;
+    padding-bottom: 0.1em;
+  }
+
+  .bg-dots {
+    background-image: radial-gradient(
+      color-mix(in oklab, var(--color-ink) 10%, transparent) 1.6px,
+      transparent 1.6px
+    );
+    background-size: 22px 22px;
+  }
+
+  .bg-sunny-grid {
+    background-color: var(--color-sun);
+    background-image:
+      linear-gradient(color-mix(in oklab, var(--color-ink) 10%, transparent) 1.5px, transparent 1.5px),
+      linear-gradient(90deg, color-mix(in oklab, var(--color-ink) 10%, transparent) 1.5px, transparent 1.5px);
+    background-size: 30px 30px;
+  }
+
+  /* ------------------------------------------------------------ workbench kit */
+  /* Inner surfaces sit inside the .pop workbench, so they get outlines but no
+     second shadow — a shadow inside a shadow reads as mush. */
+  .pane {
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-stock);
+    background: var(--color-paper-2);
+  }
+
+  .tile {
+    overflow: hidden;
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-stock);
+    background: var(--color-card);
+    transition: transform var(--dur-short) var(--ease-spring), box-shadow var(--dur-short) var(--ease-out);
+  }
+  .tile:hover {
+    transform: translateY(-2px) rotate(-0.4deg);
+    box-shadow: var(--shadow-pop);
+  }
+
+  .tile-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    border-top: 2px solid var(--color-ink);
+    background: var(--color-paper-2);
+    padding: 0.3rem 0.55rem;
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    color: var(--color-ink-2);
+  }
+  .tile-foot-col { flex-direction: column; align-items: flex-start; gap: 0; }
+
+  .thumb {
+    overflow: hidden;
+    border: 2px solid var(--color-ink);
+    border-radius: 12px;
+    background: var(--color-card);
+  }
+
+  .pill-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.7rem;
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-pill);
+    background: var(--color-card);
+    box-shadow: var(--shadow-pop-sm);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--color-ink);
+    transition: transform var(--dur-micro) var(--ease-out), box-shadow var(--dur-micro) var(--ease-out),
+      background-color var(--dur-micro) linear;
+  }
+  .pill-btn:hover:not(:disabled) {
+    transform: translateY(-1.5px) rotate(-1deg);
+    background: var(--color-butter);
+    box-shadow: 3px 3px 0 var(--color-ink);
+  }
+  .pill-btn:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: 1px 1px 0 var(--color-ink);
+  }
+  .pill-btn:disabled {
+    color: var(--color-muted);
+    border-color: var(--color-rule-2);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border: 2px solid var(--color-ink);
+    border-radius: 50%;
+    background: var(--color-card);
+    box-shadow: var(--shadow-pop-sm);
+    color: var(--color-ink);
+    transition: transform var(--dur-micro) var(--ease-out), box-shadow var(--dur-micro) var(--ease-out),
+      background-color var(--dur-micro) linear;
+  }
+  .icon-btn:hover:not(:disabled) {
+    transform: translateY(-1.5px) rotate(6deg);
+    background: var(--color-sun);
+    box-shadow: 3px 3px 0 var(--color-ink);
+  }
+  .icon-btn:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: 1px 1px 0 var(--color-ink);
+  }
+  .icon-btn:disabled {
+    color: var(--color-muted);
+    border-color: var(--color-rule-2);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  .field-input {
+    width: 100%;
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-input);
+    background: var(--color-card);
+    padding: 0.35rem 0.6rem;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    color: var(--color-ink);
+  }
+  .field-input::placeholder { color: var(--color-muted); font-weight: 400; }
+  .field-input:focus { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+
+  .meter {
+    height: 0.7rem;
+    overflow: hidden;
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-pill);
+    background: var(--color-card);
+  }
+  .meter-fill {
+    height: 100%;
+    background-image: repeating-linear-gradient(
+      -55deg,
+      var(--color-accent) 0 6px,
+      var(--color-accent-3) 6px 12px
+    );
+    transition: width var(--dur-short) var(--ease-out);
+  }
+
+  .hairline { border-top: 2px dashed var(--color-rule-2); }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.1rem 0.5rem;
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-pill);
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+}
+
+/* --------------------------------------------------------------- motion bits */
+.wiggle:hover { animation: wiggle 420ms var(--ease-boing); }
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-2.4deg); }
+  65% { transform: rotate(2deg); }
+}
+
+.bob { animation: bob 5s ease-in-out infinite; }
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); }
+  50% { transform: translateY(-8px) rotate(var(--tilt, 0deg)); }
+}
+
+.float-slow { animation: float-slow 9s ease-in-out infinite; }
+@keyframes float-slow {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(0, -16px, 0) rotate(6deg); }
+}
+
+.spin-slow { animation: spin 22s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.pop-in { animation: pop-in 520ms var(--ease-spring) both; }
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.94) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ------------------------------------------------------------------- marquee */
+.marquee {
+  overflow: hidden;
+  border-block: 2.5px solid var(--color-ink);
+  background: var(--color-accent-2);
+  color: var(--color-paper);
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 26s linear infinite;
+}
+.marquee:hover .marquee-track { animation-play-state: paused; }
+.marquee-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.65rem 1.25rem;
+  font-family: var(--font-sticker);
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* ------------------------------------------------------------------ scrollbar */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: var(--color-paper-2); }
+::-webkit-scrollbar-thumb {
+  background: var(--color-accent);
+  border: 3px solid var(--color-paper-2);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-accent-deep); }
+
+/* ------------------------------------------------------------------ controls */
+input[type="range"] {
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  border: 2px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-paper-2);
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  background: var(--color-accent);
+  border: 2px solid var(--color-ink);
+  border-radius: 50%;
+  box-shadow: 2px 2px 0 var(--color-ink);
+  cursor: grab;
+}
+input[type="range"]::-webkit-slider-thumb:active { cursor: grabbing; transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--color-ink); }
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: var(--color-accent);
+  border: 2px solid var(--color-ink);
+  border-radius: 50%;
+  box-shadow: 2px 2px 0 var(--color-ink);
+}
+
+progress { accent-color: var(--color-accent); }
+
+input[type="color"] {
+  border: 2px solid var(--color-ink);
+  border-radius: 10px;
+  padding: 2px;
+  background: var(--color-card);
+  cursor: pointer;
+}
+
+.faq-plus.is-open { transform: rotate(135deg); }
+
+/* One answer at a time; the row track eases the height instead of snapping. */
+.faq-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    grid-template-rows var(--dur-long) var(--ease-snap),
+    opacity var(--dur-short) linear,
+    transform var(--dur-long) var(--ease-snap);
+}
+.faq-panel.is-open { grid-template-rows: 1fr; opacity: 1; transform: none; }
+.faq-panel > div { overflow: hidden; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Long legal headings must break rather than push the column wide. */
+.legal-title { overflow-wrap: break-word; min-width: 0; }
+
+/* Transparency checkerboard, in sherbet rather than grey so it matches the theme. */
+.bg-checker {
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: var(--color-paper);
+  background-image:
+    linear-gradient(45deg, var(--color-sugar) 25%, transparent 25%, transparent 75%, var(--color-sugar) 75%),
+    linear-gradient(45deg, var(--color-sugar) 25%, transparent 25%, transparent 75%, var(--color-sugar) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-  .reveal {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-}
-
-input[type="range"] {
-  accent-color: var(--color-acid);
-}
-
-progress {
-  accent-color: var(--color-acid);
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #23272e;
-  border-radius: 999px;
-  border: 2px solid var(--color-ink);
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-.rise {
-  animation: rise 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  .marquee-track, .bob, .float-slow, .spin-slow { animation: none !important; }
 }

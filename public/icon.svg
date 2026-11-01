@@ -1,8 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="sizekit">
-  <rect width="64" height="64" rx="14.4" fill="#d8ff3e" />
-  <g fill="none" stroke="#08090b" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 12H12V21" />
-    <path d="M43 52h9V43" />
-  </g>
-  <rect x="24.5" y="24.5" width="15" height="15" rx="2.6" fill="#08090b" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Kilosmith">
+  <rect width="64" height="64" fill="#fff9ee"/>
+  <rect x="12" y="16" width="40" height="10" rx="5" fill="#ffd23f"/>
+  <rect x="12" y="29" width="28" height="10" rx="5" fill="#a9c7ff"/>
+  <rect x="12" y="42" width="15" height="10" rx="5" fill="#ff5ca8"/>
 </svg>

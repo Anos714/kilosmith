@@ -1,21 +1,32 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import localFont from "next/font/local";
 import { site } from "@/lib/site";
+import { themeBootstrap } from "@/lib/theme";
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
-const instrument = Instrument_Serif({
-  variable: "--font-instrument",
-  subsets: ["latin"],
-  weight: "400",
-  style: ["normal", "italic"],
+const mona = localFont({
+  src: "./fonts/MonaSans.woff2",
+  variable: "--font-mona",
+  display: "swap",
+  weight: "200 900",
+  style: "normal",
+  fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
+  declarations: [{ prop: "font-stretch", value: "75% 125%" }],
+});
+
+const fredoka = localFont({
+  src: "./fonts/Fredoka-latin.woff2",
+  variable: "--font-fredoka",
+  display: "swap",
+  weight: "300 700",
+  style: "normal",
+  fallback: ["ui-rounded", "system-ui", "sans-serif"],
 });
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.domain),
   title: {
-    default: `${site.name} — ${site.tagline}`,
+    default: `${site.name}: heavy files, made light`,
     template: `%s · ${site.name}`,
   },
   description: site.description,
@@ -47,7 +58,7 @@ export const metadata: Metadata = {
     type: "website",
     url: site.domain,
     siteName: site.name,
-    title: `${site.name} — ${site.tagline}`,
+    title: `${site.name}: ${site.tagline}`,
     description: site.description,
     locale: "en_US",
     images: [
@@ -55,24 +66,24 @@ export const metadata: Metadata = {
         url: "/og.png",
         width: 1200,
         height: 630,
-        alt: "sizekit — every size, every format, nothing uploaded",
+        alt: "Kilosmith: heavy files, made light. Image and video tools that run in your browser.",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: `${site.name} — ${site.tagline}`,
+    title: `${site.name}: ${site.tagline}`,
     description: site.description,
-    creator: "@anos714",
-    site: "@anos714",
+    creator: "@RahulSain714",
+    site: "@RahulSain714",
     images: ["/og.png"],
   },
   appleWebApp: { capable: true, title: site.name, statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#08090b",
-  colorScheme: "dark",
+  themeColor: "#fff9ee",
+  colorScheme: "light",
   width: "device-width",
   initialScale: 1,
 };
@@ -83,23 +94,30 @@ const jsonLd = [
     "@type": "SoftwareApplication",
     "@id": `${site.domain}/#app`,
     name: site.name,
+    alternateName: "Kilosmith image and video toolkit",
     applicationCategory: "MultimediaApplication",
+    applicationSubCategory: "Image and video utilities",
     operatingSystem: "Any (runs in a web browser)",
     url: site.domain,
     description: site.description,
-    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    image: `${site.domain}/og.png`,
+    screenshot: `${site.domain}/og.png`,
+    softwareVersion: "1.0",
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD", availability: "https://schema.org/InStock" },
     featureList: [
       "Batch image resize with smart crop",
+      "Crop, rotate, flip and straighten",
       "Image compression with target size",
       "PNG, JPEG, WebP and AVIF conversion",
-      "Browser-side video compression with WebCodecs",
+      "Browser-side video compression and trimming with WebCodecs",
       "Animated GIF maker",
-      "Meme maker",
+      "Meme maker with 100 templates",
       "Favicon and app icon generator",
       "Everything processed locally, no upload",
     ],
     author: { "@id": `${site.domain}/#author` },
     publisher: { "@id": `${site.domain}/#author` },
+    brand: { "@type": "Brand", name: site.name },
     datePublished: site.released,
     isAccessibleForFree: true,
     browserRequirements: "Requires JavaScript. Video compression needs WebCodecs.",
@@ -129,11 +147,9 @@ const jsonLd = [
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${instrument.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
+    <html lang="en" className={`${mona.variable} ${fredoka.variable} h-full antialiased`}>
+      <body className="flex min-h-full flex-col">
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

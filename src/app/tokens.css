@@ -1,0 +1,187 @@
+@theme static {
+  /* Type ------------------------------------------------------------------ */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5625rem;
+  --text-2xl: 1.953rem;
+  --text-3xl: 2.441rem;
+  --text-display-s: clamp(2.25rem, 4vw + 0.5rem, 3.75rem);
+  --text-display: clamp(2.9rem, 5.4vw + 0.6rem, 5.5rem);
+  --text-section: clamp(2rem, 2.5vw + 1rem, 3.5rem);
+  --text-title: clamp(1.2rem, 0.75vw + 0.875rem, 1.6rem);
+  --text-lead: clamp(1.125rem, 0.35vw + 1rem, 1.375rem);
+
+  /* Motion ---------------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-snap: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-boing: cubic-bezier(0.68, -0.55, 0.27, 1.55);
+
+  /* Palette: a bowl of sherbet ------------------------------------------- */
+  --color-error: #c81e3c;
+  --color-success: #0e7c4a;
+
+  --color-paper: #fff9ee;
+  --color-paper-2: #fff1d8;
+  --color-paper-3: #ffefd0;
+  --color-card: #ffffff;
+  --color-ink: #221139;
+  --color-ink-2: #3f2b5e;
+  --color-muted: #6a5a82;
+  --color-rule: #e2d2bd;
+  --color-rule-2: #cfb99e;
+
+  --color-accent: #ff5ca8;
+  --color-accent-deep: #bc1b5e;
+  --color-accent-ink: #221139;
+  --color-accent-2: #6c4bff;
+  --color-accent-3: #ff8a3d;
+
+  --color-mint: #7be0b8;
+  --color-mint-deep: #0f7a53;
+  --color-sun: #ffd23f;
+  --color-sun-deep: #8a6100;
+  --color-sky: #a9c7ff;
+  --color-lilac: #d9b8ff;
+  --color-coral: #ff8a5b;
+  --color-bubble: #ff9ec7;
+  --color-butter: #ffe07a;
+  --color-aqua: #b8f0ff;
+  --color-focus: #6c4bff;
+
+  --color-edge: #f7d9a8;
+  --color-fringe: #fffdf7;
+  --color-kraft: #d9a86a;
+  --color-sand: #f0cd97;
+  --color-sugar: #cfe3ff;
+  --color-hill-1: #eff7d9;
+  --color-hill-2: #dcf0d2;
+  --color-leaf: #58c48a;
+
+  /* Everything that goes *thud* behind a surface. Separate from --color-ink
+     so the dark theme can make its shadows glow instead of burn. */
+  --color-shadow: #221139;
+
+  /* Fonts ----------------------------------------------------------------- */
+  --font-display: var(--font-fredoka), ui-rounded, "Trebuchet MS", ui-sans-serif, sans-serif;
+  --font-body: var(--font-mona), ui-rounded, ui-sans-serif, system-ui, sans-serif;
+  --font-outlier: ui-monospace, "SFMono-Regular", monospace;
+  --font-sticker: var(--font-fredoka), ui-rounded, sans-serif;
+
+  /* Shape: soft but silly -------------------------------------------------- */
+  --radius-card: 28px;
+  --radius-stock: 20px;
+  --radius-input: 14px;
+  --radius-pill: 999px;
+
+  /* Hard offset shadows, no blur allowed ---------------------------------- */
+  --shadow-card: 6px 6px 0 var(--color-shadow);
+  --shadow-pop: 4px 4px 0 var(--color-shadow);
+  --shadow-pop-lg: 8px 8px 0 var(--color-shadow);
+  --shadow-pop-sm: 2px 2px 0 var(--color-shadow);
+  --shadow-paper: drop-shadow(3px 3px 0 var(--color-shadow));
+  --shadow-toy: 0 2px 0 var(--color-shadow), 0 6px 0 -2px color-mix(in oklab, var(--color-shadow) 22%, transparent);
+
+  --tracking-display: -0.015em;
+}
+
+:root {
+  color-scheme: light;
+  --space-3xs: 2px;
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --space-2xl: 64px;
+  --space-3xl: 96px;
+  --space-4xl: 144px;
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+  --container: 1240px;
+  --gutter: 40px;
+  --gap-columns: 24px;
+  --section-gap-s: 88px;
+  --section-gap: 112px;
+  --section-gap-l: 144px;
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-sticky-nav: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+  --rule-hair: 1px;
+  --display-weight: 600;
+}
+@media (max-width: 60rem) {
+  :root {
+    --gutter: 24px;
+    --section-gap-s: 64px;
+    --section-gap: 80px;
+    --section-gap-l: 96px;
+  }
+}
+@media (max-width: 40rem) {
+  :root {
+    --gutter: 18px;
+    --section-gap-s: 48px;
+    --section-gap: 64px;
+    --section-gap-l: 80px;
+    --gap-columns: 16px;
+  }
+}
+
+/* ------------------------------------------------------- sherbet, after dark
+ * The same bowl of candy, dipped in grape. Outlines go pale and the hard
+ * offset shadows turn glow-lilac, so the toy-brick feel survives the lights
+ * going out instead of turning into a serious midnight dashboard. */
+.dark {
+  color-scheme: dark;
+
+  --color-paper: #1a1030;
+  --color-paper-2: #221543;
+  --color-paper-3: #2a1a52;
+  --color-card: #2b1a4d;
+  --color-ink: #f6ecff;
+  --color-ink-2: #ddcbf6;
+  --color-muted: #a692d1;
+  --color-rule: #4a3372;
+  --color-rule-2: #5d4389;
+  --color-shadow: #7b5cc9;
+
+  --color-error: #ff7d92;
+  --color-success: #45d69b;
+
+  --color-accent: #ff77bb;
+  --color-accent-deep: #ffb3d8;
+  --color-accent-2: #9d86ff;
+  --color-accent-3: #ff9d5c;
+
+  --color-mint: #79e6bd;
+  --color-mint-deep: #0b5c3e;
+  --color-sun: #ffd84d;
+  --color-sky: #a5c8ff;
+  --color-lilac: #dcbcff;
+  --color-coral: #ff9468;
+  --color-bubble: #ffa6cf;
+  --color-butter: #ffe487;
+  --color-aqua: #bdf2ff;
+  --color-focus: #a68cff;
+
+  --color-edge: #4a3372;
+  --color-fringe: #241645;
+  --color-kraft: #8a6234;
+  --color-sand: #6b4f2a;
+  --color-sugar: #3b2a63;
+  --color-hill-1: #2c3f2a;
+  --color-hill-2: #24382a;
+  --color-leaf: #3f9c6d;
+}
