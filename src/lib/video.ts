@@ -36,6 +36,16 @@ export type VideoProgress = {
 
 const even = (value: number) => Math.max(2, Math.round(value / 2) * 2);
 
+/** A number the caller can trust: browsers hand back Infinity/NaN for odd files. */
+function finite(value: number, fallback = 0) {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function clamp(value: number, min: number, max: number, fallback: number) {
+  const next = finite(value, fallback);
+  return Math.min(max, Math.max(min, next));
+}
+
 /** AAC encoding is platform-dependent: Chrome on Linux often has no encoder. */
 export async function canEncodeAac(): Promise<boolean> {
   if (typeof AudioEncoder === "undefined") return false;
@@ -63,29 +73,49 @@ export async function probeVideo(file: File): Promise<VideoProbe> {
   video.muted = true;
   video.src = url;
 
-  const meta = await new Promise<{ duration: number; width: number; height: number }>(
-    (resolve, reject) => {
-      video.onloadedmetadata = () =>
-        resolve({
-          duration: video.duration,
-          width: video.videoWidth,
-          height: video.videoHeight,
-        });
-      video.onerror = () => reject(new Error("This file is not a video the browser can read"));
+  try {
+    const meta = await new Promise<{ duration: number; width: number; height: number }>(
+      (resolve, reject) => {
+        const timer = window.setTimeout(
+          () => reject(new Error("This video took too long to open. Try another file.")),
+          20_000
+        );
+        const settle = (result: { duration: number; width: number; height: number }) => {
+          window.clearTimeout(timer);
+          resolve(result);
+        };
+        video.onloadedmetadata = () =>
+          settle({ duration: video.duration, width: video.videoWidth, height: video.videoHeight });
+        video.onerror = () => {
+          window.clearTimeout(timer);
+          reject(new Error("This file is not a video the browser can read"));
+        };
+      }
+    );
+
+    // Some containers report Infinity (or nothing at all) until fully buffered.
+    const duration = finite(meta.duration, 0);
+    if (!(duration > 0)) throw new Error("This video has no readable duration");
+    if (!(meta.width > 0) || !(meta.height > 0)) {
+      throw new Error("This video has no readable picture size");
     }
-  );
 
-  URL.revokeObjectURL(url);
-
-  return {
-    duration: meta.duration,
-    width: meta.width,
-    height: meta.height,
-    displayWidth: meta.width,
-    displayHeight: meta.height,
-    rotated: false,
-    audio: true,
-  };
+    return {
+      duration,
+      width: meta.width,
+      height: meta.height,
+      displayWidth: meta.width,
+      displayHeight: meta.height,
+      rotated: false,
+      audio: true,
+    };
+  } finally {
+    video.onloadedmetadata = null;
+    video.onerror = null;
+    video.removeAttribute("src");
+    video.load();
+    URL.revokeObjectURL(url);
+  }
 }
 
 type Demuxed = {
@@ -117,8 +147,9 @@ async function demux(buffer: ArrayBuffer): Promise<Demuxed> {
       iso.setExtractionOptions(found.id, null, { nbSamples: Number.POSITIVE_INFINITY });
 
       iso.onSamples = (_id: number, _user: unknown, chunk: Sample[]) => {
-        samples.push(...chunk);
-        if (samples.length >= found.nb_samples) {
+        // Spread-args would blow the stack on a long clip delivered in one pass.
+        for (const sample of chunk) samples.push(sample);
+        if (!chunk.length || samples.length >= found.nb_samples) {
           clearTimeout(timer);
           resolve({
             info,
@@ -160,8 +191,34 @@ function extractDescription(iso: ReturnType<typeof createFile>, trackId: number)
   }
 }
 
-async function pickCodec(width: number, height: number, bitrate: number, framerate: number) {
-  const candidates = [
+/**
+ * mp4box only writes a full codec string when the container carries the codec
+ * config box. Files Chrome records itself declare a bare `vp09`, which WebCodecs
+ * rejects as ambiguous, so complete the common families from their defaults.
+ */
+function decoderCodec(raw: string | undefined) {
+  const codec = (raw || "").trim();
+  if (!codec) throw new Error("This video has no codec information");
+  if (codec.startsWith("vp09")) {
+    return /^vp09\.\d{2}\.\d{2}\.\d{2}/.test(codec) ? codec : "vp09.00.30.08";
+  }
+  if (codec.startsWith("av01")) {
+    return /^av01\.\d\.\d{2}[A-Z]\.\d{2}/.test(codec) ? codec : "av01.0.04M.08";
+  }
+  return codec;
+}
+
+/**
+ * H.264/HEVC need their parameter sets; VP9 and AV1 carry nothing in a
+ * `vpcC`/`avcC`-style description that a decoder wants, so pass nothing.
+ */
+function decoderDescription(raw: string | undefined, description?: Uint8Array) {
+  const codec = (raw || "").trim();
+  if (codec.startsWith("vp09") || codec.startsWith("av01")) return undefined;
+  return description;
+}
+
+async function pickCodec(width: number, height: number, bitrate: number, framerate: number) {  const candidates = [
     { codec: "avc1.4d0028", muxer: "avc" as const },
     { codec: "avc1.42001f", muxer: "avc" as const },
     { codec: "vp09.00.10.08", muxer: "vp9" as const },
@@ -185,13 +242,16 @@ async function pickCodec(width: number, height: number, bitrate: number, framera
 }
 
 async function audioTrack(file: File) {
+  let context: AudioContext | null = null;
   try {
-    const context = new AudioContext();
-    const buffer = await context.decodeAudioData(await file.arrayBuffer());
-    await context.close();
-    return buffer;
+    context = new AudioContext();
+    return await context.decodeAudioData(await file.arrayBuffer());
   } catch {
     return null;
+  } finally {
+    // decodeAudioData rejects on a silent or unsupported file; the device
+    // handle stays open forever unless we close it on that path too.
+    if (context && context.state !== "closed") void context.close().catch(() => {});
   }
 }
 
@@ -201,7 +261,7 @@ export async function compressVideo(
   onProgress: (progress: VideoProgress) => void
 ): Promise<{ blob: Blob; width: number; height: number; note?: string }> {
   if (!canUseWebCodecs()) {
-    throw new Error("WebCodecs is not available — try Chrome, Edge or a recent Safari");
+    throw new Error("WebCodecs is not available. Try Chrome, Edge or a recent Safari");
   }
 
   onProgress({ phase: "demux", done: 0, total: 1 });
@@ -209,33 +269,44 @@ export async function compressVideo(
   const { info, samples, track, description } = await demux(source);
   if (!samples.length) throw new Error("No frames could be read from this video");
 
-  const duration = info.duration / info.timescale;
+  const timescale = track.timescale || info.timescale || 1;
+  const declared = finite(info.duration / (info.timescale || 1), 0);
+  const last = samples[samples.length - 1];
+  // Some files report a broken duration in the header; the sample list never lies.
+  const duration = clamp(declared > 0 ? declared : (last.cts + last.duration) / timescale, 0.1, 86_400, 0.1);
+
   const visual = track.video;
   if (!visual) throw new Error("This track has no video stream");
   const codedWidth = visual.width;
   const codedHeight = visual.height;
+  if (!(codedWidth > 0) || !(codedHeight > 0)) {
+    throw new Error("This video reports no picture size");
+  }
 
   // Trim range, clamped to the real duration with at least one frame of room.
-  const startAt = Math.max(0, Math.min(options.start ?? 0, duration - 0.1));
-  const endAt = Math.max(startAt + 0.1, Math.min(options.end ?? duration, duration));
+  const startAt = clamp(options.start ?? 0, 0, duration - 0.1, 0);
+  const endAt = clamp(options.end ?? duration, startAt + 0.1, duration, duration);
   const clipDuration = endAt - startAt;
 
-  const timeOf = (sample: Sample) => sample.cts / track.timescale;
+  const timeOf = (sample: Sample) => sample.cts / timescale;
   const keptSamples = samples.filter(
     (sample) => timeOf(sample) >= startAt - 0.5 && timeOf(sample) <= endAt + 0.5
   );
-  const framerate = Math.min(
+  const framerate = clamp(
+    (keptSamples.length || samples.length) / clipDuration,
+    12,
     60,
-    Math.max(12, (keptSamples.length || samples.length) / Math.max(0.1, clipDuration))
+    30
   );
 
-  const scale = options.maxHeight ? Math.min(1, options.maxHeight / codedHeight) : 1;
+  const maxHeight = clamp(options.maxHeight, 0, 4320, 0);
+  const scale = maxHeight > 0 ? Math.min(1, maxHeight / codedHeight) : 1;
   const width = even(codedWidth * scale);
   const height = even(codedHeight * scale);
 
   // ~0.02 bpp is rough, ~0.11 bpp is generous. Quality 1..100 maps between them.
-  const bpp = 0.018 + (options.quality / 100) * 0.09;
-  const bitrate = Math.round(width * height * framerate * bpp);
+  const bpp = 0.018 + (clamp(options.quality, 1, 100, 60) / 100) * 0.09;
+  const bitrate = clamp(Math.round(width * height * framerate * bpp), 128_000, 50_000_000, 2_000_000);
 
   const chosen = await pickCodec(width, height, bitrate, framerate);
 
@@ -263,169 +334,224 @@ export async function compressVideo(
 
   let encodedFrames = 0;
   let failed = false;
-  let encoderError: unknown = null;
-
-  const encoder = new VideoEncoder({
-    output: (chunk, meta) => {
-      try {
-        muxer.addVideoChunk(chunk, meta);
-      } catch (error) {
-        failed = true;
-        encoderError = error;
-      }
-    },
-    error: (error) => {
-      failed = true;
-      encoderError = error;
-    },
-  });
-  encoder.configure({
-    codec: chosen.codec,
-    width,
-    height,
-    bitrate,
-    framerate,
-    latencyMode: "quality",
-  });
-
-  const decoder = new VideoDecoder({
-    output: (frame) => {
-      try {
-        const time = frame.timestamp / 1_000_000;
-        // Frames outside the trim range are decoded (the codec needs them)
-        // but never drawn or encoded.
-        if (time < startAt - 0.001 || time > endAt + 0.001) return;
-        ctx.drawImage(frame, 0, 0, width, height);
-        const scaled = new VideoFrame(canvas, {
-          timestamp: Math.max(0, frame.timestamp - startAt * 1_000_000),
-          duration: frame.duration ?? undefined,
-        });
-        encoder.encode(scaled, { keyFrame: encodedFrames % 90 === 0 });
-        scaled.close();
-        encodedFrames++;
-        if (encodedFrames % 4 === 0) {
-          onProgress({ phase: "video", done: encodedFrames, total: keptSamples.length });
-        }
-      } finally {
-        frame.close();
-      }
-    },
-    error: () => {
-      failed = true;
-    },
-  });
-
-  decoder.configure({
-    codec: track.codec,
-    codedWidth,
-    codedHeight,
-    description,
-  });
-
-  // Start decoding at the keyframe at or before the in-point: a decoder cannot
-  // begin mid-GOP, so the frames before the trim are decoded and then dropped.
-  let firstIndex = samples.findIndex((sample) => timeOf(sample) >= startAt);
-  if (firstIndex < 0) firstIndex = samples.length - 1;
-  while (firstIndex > 0 && !samples[firstIndex].is_sync) firstIndex--;
-
-  let reachedEnd = false;
-  for (let index = firstIndex; index < samples.length; index++) {
-    const sample = samples[index];
-    if (failed) break;
-    // Stop on the first keyframe past the out-point; everything before it has
-    // already been fed, so the GOP is complete.
-    if (reachedEnd && sample.is_sync) break;
-    if (!reachedEnd && timeOf(sample) > endAt) reachedEnd = true;
-
-    const chunk = new EncodedVideoChunk({
-      type: sample.is_sync ? "key" : "delta",
-      timestamp: (sample.cts / track.timescale) * 1_000_000,
-      duration: (sample.duration / track.timescale) * 1_000_000,
-      data: sample.data!,
-    });
-    decoder.decode(chunk);
-    // Bound both pipelines: the decoder runs ahead of the encoder, and an
-    // unbounded queue on a long clip means hundreds of raw frames in memory.
-    while (decoder.decodeQueueSize > 24 || encoder.encodeQueueSize > 24) {
-      await new Promise((resolve) => setTimeout(resolve, 4));
-    }
-  }
-
-  await decoder.flush();
-  // Every frame the decoder produced is still sitting in the encoder queue;
-  // flush it before closing, or close() throws those frames away.
-  await encoder.flush();
-  if (failed) {
-    throw new Error(
-      encoderError instanceof Error ? encoderError.message : "The video encoder failed"
-    );
-  }
-
-  onProgress({ phase: "video", done: keptSamples.length, total: keptSamples.length });
-
+  let codecError: unknown = null;
+  let encoder: VideoEncoder | null = null;
+  let decoder: VideoDecoder | null = null;
   let note: string | undefined;
 
-  if (options.keepAudio && clipDuration < 900) {
-    onProgress({ phase: "audio", done: 0, total: 1 });
-    const audio = await audioTrack(file);
-    if (audio && audio.numberOfChannels > 0) {
-      try {
-        const audioBitrate = 128_000;
-        const audioEncoder = new AudioEncoder({
-          output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
-          error: () => {
-            note = "Audio could not be encoded and was dropped.";
-          },
-        });
-        audioEncoder.configure({
-          codec: "mp4a.40.2",
-          sampleRate: audio.sampleRate,
-          numberOfChannels: Math.min(2, audio.numberOfChannels),
-          bitrate: audioBitrate,
-        });
+  // A codec that has already reported an error cannot be flushed, so every
+  // break out of the pipeline has to surface that error instead of the
+  // confusing "Cannot call 'flush' on a closed codec" from the browser.
+  const bail = () => {
+    if (!failed) return;
+    throw new Error(
+      codecError instanceof Error && codecError.message
+        ? codecError.message
+        : "The video encoder or decoder gave up"
+    );
+  };
 
-        const channels = Math.min(2, audio.numberOfChannels);
-        const chunkFrames = 4096;
-        const left = audio.getChannelData(0);
-        const right = channels > 1 ? audio.getChannelData(1) : left;
-        const fromFrame = Math.min(audio.length, Math.floor(startAt * audio.sampleRate));
-        const toFrame = Math.min(audio.length, Math.ceil(endAt * audio.sampleRate));
-
-        for (let offset = fromFrame; offset < toFrame; offset += chunkFrames) {
-          const frames = Math.min(chunkFrames, toFrame - offset);
-          const planar = new Float32Array(frames * channels);
-          planar.set(left.subarray(offset, offset + frames), 0);
-          if (channels > 1) planar.set(right.subarray(offset, offset + frames), frames);
-
-          const data = new AudioData({
-            format: "f32-planar",
-            sampleRate: audio.sampleRate,
-            numberOfFrames: frames,
-            numberOfChannels: channels,
-            timestamp: ((offset - fromFrame) / audio.sampleRate) * 1_000_000,
-            data: planar,
-          });
-          audioEncoder.encode(data);
-          data.close();
+  try {
+    encoder = new VideoEncoder({
+      output: (chunk, meta) => {
+        try {
+          muxer.addVideoChunk(chunk, meta);
+        } catch (error) {
+          failed = true;
+          codecError = error;
         }
+      },
+      error: (error) => {
+        failed = true;
+        codecError = error;
+      },
+    });
+    encoder.configure({
+      codec: chosen.codec,
+      width,
+      height,
+      bitrate,
+      framerate,
+      latencyMode: "quality",
+    });
 
-        await audioEncoder.flush();
-        audioEncoder.close();
-      } catch {
-        note = "Audio could not be re-encoded and was dropped.";
-      }
-    } else {
-      note = "No audio track was found.";
+    decoder = new VideoDecoder({
+      output: (frame) => {
+        try {
+          const time = frame.timestamp / 1_000_000;
+          // Frames outside the trim range are decoded (the codec needs them)
+          // but never drawn or encoded.
+          if (time < startAt - 0.001 || time > endAt + 0.001) return;
+          ctx.drawImage(frame, 0, 0, width, height);
+          const scaled = new VideoFrame(canvas, {
+            timestamp: Math.max(0, frame.timestamp - startAt * 1_000_000),
+            duration: frame.duration ?? undefined,
+          });
+          try {
+            encoder!.encode(scaled, { keyFrame: encodedFrames % 90 === 0 });
+          } finally {
+            // encode() throws once the encoder is closed or over-dequeued;
+            // without this the frame's GPU buffer is orphaned.
+            scaled.close();
+          }
+          encodedFrames++;
+          if (encodedFrames % 4 === 0) {
+            onProgress({ phase: "video", done: encodedFrames, total: keptSamples.length });
+          }
+        } catch (error) {
+          // Letting this escape would abort the decoder and hide the real cause.
+          failed = true;
+          codecError = error;
+        } finally {
+          frame.close();
+        }
+      },
+      error: (error) => {
+        failed = true;
+        codecError = error;
+      },
+    });
+
+    try {
+      decoder.configure({
+        codec: decoderCodec(track.codec),
+        codedWidth,
+        codedHeight,
+        description: decoderDescription(track.codec, description),
+      });
+    } catch (error) {
+      throw new Error(
+        `This browser cannot open ${track.codec || "that"} video (${
+          error instanceof Error ? error.message : "configure failed"
+        })`
+      );
     }
-  } else if (!options.keepAudio) {
-    note = "Audio was left out — the switch is off.";
+
+    // Start decoding at the keyframe at or before the in-point: a decoder cannot
+    // begin mid-GOP, so the frames before the trim are decoded and then dropped.
+    let firstIndex = samples.findIndex((sample) => timeOf(sample) >= startAt);
+    if (firstIndex < 0) firstIndex = samples.length - 1;
+    while (firstIndex > 0 && !samples[firstIndex].is_sync) firstIndex--;
+
+    let reachedEnd = false;
+    for (let index = firstIndex; index < samples.length; index++) {
+      const sample = samples[index];
+      if (failed) break;
+      // Stop on the first keyframe past the out-point; everything before it has
+      // already been fed, so the GOP is complete.
+      if (reachedEnd && sample.is_sync) break;
+      if (!reachedEnd && timeOf(sample) > endAt) reachedEnd = true;
+
+      const chunk = new EncodedVideoChunk({
+        type: sample.is_sync ? "key" : "delta",
+        timestamp: (sample.cts / timescale) * 1_000_000,
+        duration: (sample.duration / timescale) * 1_000_000,
+        data: sample.data!,
+      });
+      decoder.decode(chunk);
+      // Bound both pipelines: the decoder runs ahead of the encoder, and an
+      // unbounded queue on a long clip means hundreds of raw frames in memory.
+      while (decoder.decodeQueueSize > 24 || encoder.encodeQueueSize > 24) {
+        await new Promise((resolve) => setTimeout(resolve, 4));
+      }
+    }
+
+    bail();
+    await decoder.flush();
+    // Every frame the decoder produced is still sitting in the encoder queue;
+    // flush it before closing, or close() throws those frames away.
+    await encoder.flush();
+    bail();
+
+    onProgress({ phase: "video", done: keptSamples.length, total: keptSamples.length });
+
+    if (options.keepAudio && clipDuration < 900) {
+      onProgress({ phase: "audio", done: 0, total: 1 });
+      const audio = await audioTrack(file);
+      if (audio && audio.numberOfChannels > 0) {
+        note = await encodeAudio(muxer, audio, startAt, endAt).catch(
+          () => "Audio could not be re-encoded and was dropped."
+        );
+      } else {
+        note = "No audio track was found.";
+      }
+    } else if (!options.keepAudio) {
+      note = "Audio was left out: the switch is off.";
+    }
+
+    onProgress({ phase: "mux", done: 0, total: 1 });
+    muxer.finalize();
+
+    const blob = new Blob([target.buffer], { type: "video/mp4" });
+    return { blob, width, height, note };
+  } finally {
+    // A throw anywhere in the pipeline (a bad sample, a flush that fails, the
+    // user closing the tab mid-encode) must still hand the hardware encoder
+    // back, or the next run on this page finds none.
+    if (encoder && encoder.state !== "closed") encoder.close();
+    if (decoder && decoder.state !== "closed") decoder.close();
   }
+}
 
-  onProgress({ phase: "mux", done: 0, total: 1 });
-  encoder.close();
-  decoder.close();
-  muxer.finalize();
+type ChunkMuxer = Pick<Muxer<ArrayBufferTarget>, "addAudioChunk">;
 
-  const blob = new Blob([target.buffer], { type: "video/mp4" });
-  return { blob, width, height, note };
+async function encodeAudio(
+  muxer: ChunkMuxer,
+  audio: AudioBuffer,
+  startAt: number,
+  endAt: number
+): Promise<string | undefined> {
+  let encoder: AudioEncoder | null = null;
+  let dropped: string | undefined;
+  try {
+    const channels = Math.min(2, audio.numberOfChannels);
+    encoder = new AudioEncoder({
+      output: (chunk, meta) => {
+        try {
+          muxer.addAudioChunk(chunk, meta);
+        } catch {
+          dropped = "Audio could not be muxed and was dropped.";
+        }
+      },
+      error: () => {
+        dropped = "Audio could not be encoded and was dropped.";
+      },
+    });
+    encoder.configure({
+      codec: "mp4a.40.2",
+      sampleRate: audio.sampleRate,
+      numberOfChannels: channels,
+      bitrate: 128_000,
+    });
+
+    const chunkFrames = 4096;
+    const left = audio.getChannelData(0);
+    const right = channels > 1 ? audio.getChannelData(1) : left;
+    const fromFrame = Math.min(audio.length, Math.floor(startAt * audio.sampleRate));
+    const toFrame = Math.min(audio.length, Math.ceil(endAt * audio.sampleRate));
+
+    for (let offset = fromFrame; offset < toFrame; offset += chunkFrames) {
+      if (dropped) break;
+      const frames = Math.min(chunkFrames, toFrame - offset);
+      const planar = new Float32Array(frames * channels);
+      planar.set(left.subarray(offset, offset + frames), 0);
+      if (channels > 1) planar.set(right.subarray(offset, offset + frames), frames);
+
+      const data = new AudioData({
+        format: "f32-planar",
+        sampleRate: audio.sampleRate,
+        numberOfFrames: frames,
+        numberOfChannels: channels,
+        timestamp: ((offset - fromFrame) / audio.sampleRate) * 1_000_000,
+        data: planar,
+      });
+      encoder.encode(data);
+      data.close();
+    }
+
+    await encoder.flush();
+    return dropped;
+  } finally {
+    if (encoder && encoder.state !== "closed") encoder.close();
+  }
 }

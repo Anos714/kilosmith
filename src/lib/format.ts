@@ -12,7 +12,3 @@ export function slug(input: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 40) || "image";
 }
-
-export function extensionOf(blob: Blob): string {
-  return blob.type === "image/png" ? "png" : "jpg";
-}

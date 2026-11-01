@@ -30,7 +30,7 @@ API = "https://api.imgflip.com/get_memes"
 
 FULL_EDGE = 1100
 THUMB_EDGE = 240
-UA = {"User-Agent": "sizekit-template-builder/1.0"}
+UA = {"User-Agent": "Kilosmith-template-builder/1.0"}
 
 
 def slugify(name: str) -> str:
