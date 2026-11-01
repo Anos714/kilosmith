@@ -18,7 +18,7 @@ Everything runs in the tab. No upload, no account, no backend, no telemetry. Liv
 | **Convert** | Batch JPEG / PNG / WebP / AVIF. Alpha preserved where the format supports it; JPEG and AVIF composite on white. |
 | **Video** | MP4/MOV re-encode with WebCodecs: trim in/out, quality → bitrate, resolution cap, audio on/off, live progress, MP4 out. |
 | **GIF** | Still sequence → looping GIF with per-frame delay, width cap and 64/128/256-colour palette. |
-| **Meme** | 100 built-in templates or your own photo, up to six draggable captions, per-caption font/case/fill/outline, auto-fit sizing, PNG/JPG export and copy to clipboard. |
+| **Meme** | 200 built-in templates or your own photo, up to six draggable captions, per-caption font/case/fill/outline, auto-fit sizing, PNG/JPG export and copy to clipboard. |
 | **Favicon** | `.ico` (16/32/48), `apple-touch-icon.png`, Android PNGs, `manifest.webmanifest` and the `<head>` snippet. |
 
 ## Design
@@ -120,8 +120,11 @@ rights stay with their owners.
    both queues bounded so a long clip cannot balloon memory.
 4. `mp4-muxer` writes a fresh MP4 in memory with `firstTimestampBehavior: "offset"`, because B-frame
    sources rarely start at presentation time 0.
-5. Audio is decoded with WebAudio and re-encoded to AAC when the platform has an AAC encoder; otherwise
-   the clip is exported without sound and the UI says so before you start.
+5. Audio is decoded with WebAudio and re-encoded to AAC when the platform has an AAC encoder, with an
+   Opus fallback (resampled to 48 kHz) when it does not — Chrome on Linux has no AAC encoder but always
+   has Opus, so the soundtrack survives. The compressed audio chunks are buffered before the muxer is
+   built, so the MP4 declares exactly the audio track that was really encoded; only a browser with
+   neither codec exports silence, and the UI says so before you start.
 
 ## Why the AVIF encoder lives in `/public`
 
