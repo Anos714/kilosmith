@@ -4,9 +4,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { IconUpload } from "@/components/icons";
 
 export function Panel({ className = "", children }: { className?: string; children: ReactNode }) {
-  return (
-    <div className={`rounded-[14px] border border-line bg-panel ${className}`}>{children}</div>
-  );
+  return <div className={`pane ${className}`}>{children}</div>;
 }
 
 export function Field({
@@ -22,12 +20,14 @@ export function Field({
 }) {
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-500">{label}</p>
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <p className="font-[family-name:var(--font-display)] text-[14px] font-medium text-ink-2">
+          {label}
+        </p>
         {right}
       </div>
       {children}
-      {hint && <p className="mt-1.5 text-[11px] leading-snug text-zinc-600">{hint}</p>}
+      {hint && <p className="mt-2 text-[12px] leading-relaxed text-muted">{hint}</p>}
     </div>
   );
 }
@@ -44,23 +44,19 @@ export function Segmented<T extends string>({
   size?: "sm" | "md";
 }) {
   return (
-    <div
-      role="tablist"
-      className="inline-flex max-w-full flex-wrap gap-0.5 rounded-lg border border-line p-0.5"
-    >
+    <div className="flex w-full max-w-full flex-wrap gap-1 rounded-[var(--radius-input)] border-2 border-ink bg-card p-1">
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
-          role="tab"
-          aria-selected={value === option.value}
+          aria-pressed={value === option.value}
           onClick={() => onChange(option.value)}
-          className={`rounded-md transition ${
-            size === "sm" ? "px-2.5 py-1 text-[10px]" : "px-3 py-1.5 text-[12px]"
-          } font-mono ${
+          className={`${
+            size === "sm" ? "px-3 py-1 text-[12px]" : "px-4 py-1.5 text-[13px]"
+          } min-w-0 flex-1 basis-[58px] whitespace-nowrap rounded-full font-[family-name:var(--font-display)] font-medium transition-all duration-200 ${
             value === option.value
-              ? "bg-line-2 text-zinc-100"
-              : "text-zinc-500 hover:text-zinc-300"
+              ? "bg-ink text-paper shadow-[2px_2px_0_var(--color-shadow)]"
+              : "text-muted hover:bg-butter hover:text-ink"
           }`}
         >
           {option.label}
@@ -88,9 +84,13 @@ export function Slider({
   display?: string;
 }) {
   return (
-    <Field label={label} right={<span className="font-mono text-[10px] text-zinc-400">{display ?? value}</span>}>
+    <Field
+      label={label}
+      right={<span className="text-[13px] font-medium text-ink-2 tabular-nums">{display ?? value}</span>}
+    >
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={max}
         step={step}
@@ -119,16 +119,74 @@ export function Button({
 }) {
   const styles =
     variant === "primary"
-      ? "bg-acid text-ink hover:brightness-95 disabled:bg-line disabled:text-zinc-600"
+      ? "border-2 border-ink bg-accent text-accent-ink shadow-[3px_3px_0_var(--color-shadow)] hover:-translate-y-0.5 hover:bg-accent-3 hover:shadow-[4px_4px_0_var(--color-shadow)] active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-shadow)] disabled:border-rule-2 disabled:bg-rule disabled:text-muted disabled:shadow-none"
       : variant === "secondary"
-        ? "border border-line text-zinc-200 hover:border-line-2 hover:bg-panel-2 disabled:text-zinc-600"
-        : "text-zinc-400 hover:text-zinc-100";
+        ? "border-2 border-ink bg-card text-ink shadow-[3px_3px_0_var(--color-shadow)] hover:-translate-y-0.5 hover:bg-butter hover:shadow-[4px_4px_0_var(--color-shadow)] active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-shadow)] disabled:border-rule-2 disabled:text-muted disabled:shadow-none"
+        : "border-2 border-transparent text-muted hover:border-ink hover:bg-sun hover:text-ink disabled:text-rule-2";
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12.5px] font-medium transition disabled:cursor-not-allowed ${styles} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 font-[family-name:var(--font-display)] text-[14px] font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:translate-y-0 ${styles} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Small sticker-shaped action used inside the workbench (Add, Clear, All, Reset). */
+export function MiniButton({
+  children,
+  onClick,
+  disabled,
+  active,
+  title,
+  className = "",
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  title?: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-pressed={active}
+      className={`pill-btn ${active ? "bg-ink text-paper" : ""} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Round icon-only sticker button. `label` is required — it becomes the accessible name. */
+export function IconButton({
+  children,
+  onClick,
+  label,
+  disabled,
+  className = "",
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  label: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={`icon-btn ${className}`}
     >
       {children}
     </button>
@@ -152,10 +210,10 @@ export function Chip({
       onClick={onClick}
       title={title}
       aria-pressed={active}
-      className={`rounded-md border px-2 py-1 font-mono text-[10px] transition ${
+      className={`rounded-full border-2 px-2.5 py-1 font-[family-name:var(--font-display)] text-[12px] font-medium transition-all duration-200 ${
         active
-          ? "border-acid/40 bg-acid/10 text-acid"
-          : "border-line text-zinc-500 hover:border-line-2 hover:text-zinc-300"
+          ? "border-ink bg-ink text-paper shadow-[2px_2px_0_var(--color-shadow)]"
+          : "border-ink/25 bg-card text-muted hover:-translate-y-0.5 hover:border-ink hover:bg-sun hover:text-ink hover:shadow-[2px_2px_0_var(--color-shadow)]"
       }`}
     >
       {children}
@@ -163,12 +221,34 @@ export function Chip({
   );
 }
 
+const STATUS = {
+  working: { tone: "bg-butter", text: "thinking…" },
+  done: { tone: "bg-mint", text: "ready!" },
+  error: { tone: "bg-coral", text: "oops" },
+} as const;
+
+/** The little status pill on every result row. */
+export function StatusTag({ state, text }: { state: "working" | "done" | "error"; text?: string }) {
+  const status = STATUS[state];
+  return (
+    <span className={`tag ${status.tone}`}>
+      <span
+        aria-hidden
+        className={`size-1.5 rounded-full bg-ink ${state === "working" ? "animate-pulse" : ""}`}
+      />
+      {text ?? status.text}
+    </span>
+  );
+}
+
 export function DropZone({
   onFiles,
   accept = "image/*",
   multiple = false,
-  title = "Drop files here, or click to browse",
-  hint = "Nothing is uploaded. Everything runs in this tab.",
+  title = "Drop a file here",
+  hint = "or click to browse. Nothing is uploaded.",
+  doodle = "plop it here",
+  accent = "bg-sun",
   compact = false,
 }: {
   onFiles: (files: File[]) => void;
@@ -176,6 +256,8 @@ export function DropZone({
   multiple?: boolean;
   title?: string;
   hint?: string;
+  doodle?: string;
+  accent?: string;
   compact?: boolean;
 }) {
   const [dragging, setDragging] = useState(false);
@@ -196,27 +278,53 @@ export function DropZone({
         event.preventDefault();
         setDragging(false);
         const files = Array.from(event.dataTransfer.files).filter((file) =>
-          accept === "*" ? true : accept.split(",").some((type) => file.type.startsWith(type.trim().replace("*", "")))
+          accept === "*"
+            ? true
+            : accept.split(",").some((type) => file.type.startsWith(type.trim().replace("*", "")))
         );
         if (files.length) onFiles(files);
       }}
       role="button"
       tabIndex={0}
-      className={`group relative cursor-pointer overflow-hidden rounded-[14px] border border-dashed text-center transition ${
-        compact ? "px-4 py-5" : "px-6 py-12 sm:py-16"
-      } ${dragging ? "border-acid/70 bg-acid/[0.04]" : "border-line bg-panel hover:border-line-2"}`}
+      aria-label={title}
+      className={`group relative cursor-pointer overflow-hidden rounded-3xl border-[2.5px] border-dashed text-center transition-all duration-200 ${
+        compact ? "px-4 py-6" : "px-6 py-12 sm:py-16"
+      } ${
+        dragging
+          ? "-translate-y-1 border-ink bg-butter shadow-[6px_6px_0_var(--color-shadow)]"
+          : "border-ink/30 bg-card hover:-translate-y-0.5 hover:border-ink hover:bg-paper-2 hover:shadow-[5px_5px_0_var(--color-shadow)]"
+      }`}
     >
-      {!compact && <div className="pointer-events-none absolute inset-0 glow" />}
-      <div className="relative flex flex-col items-center gap-2.5">
-        <div className="flex size-10 items-center justify-center rounded-xl border border-line bg-ink text-acid">
-          <IconUpload size={17} />
+      <span
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 opacity-[0.35] ${dragging ? "" : "bg-dots"}`}
+      />
+      <span
+        aria-hidden
+        className={`sticker absolute right-4 top-4 rotate-3 transition-transform duration-200 group-hover:-rotate-3 ${accent}`}
+      >
+        {doodle}
+      </span>
+
+      <div className="relative flex flex-col items-center gap-3">
+        <span
+          className={`flex size-14 items-center justify-center rounded-full border-2 border-ink text-ink shadow-[3px_3px_0_var(--color-shadow)] transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110 ${accent} ${
+            dragging ? "animate-bounce" : ""
+          }`}
+        >
+          <IconUpload size={22} />
+        </span>
+        <div>
+          <p className="font-[family-name:var(--font-display)] text-[18px] font-semibold text-ink">
+            {title}
+          </p>
+          <p className="mx-auto mt-1 max-w-[46ch] text-[13px] text-muted">{hint}</p>
         </div>
-        <p className="text-[14px] font-medium text-zinc-200">{title}</p>
-        <p className="max-w-xs font-mono text-[10.5px] leading-relaxed text-zinc-500">{hint}</p>
       </div>
       <input
         ref={inputRef}
         type="file"
+        aria-label={title}
         accept={accept}
         multiple={multiple}
         className="hidden"
@@ -233,7 +341,8 @@ export function DropZone({
 export function Spinner({ className = "" }: { className?: string }) {
   return (
     <span
-      className={`inline-block size-3 animate-spin rounded-full border border-zinc-600 border-t-acid ${className}`}
+      className={`inline-block size-4 animate-spin rounded-full border-2 border-ink/20 border-t-accent-deep ${className}`}
+      aria-hidden
     />
   );
 }
@@ -248,10 +357,10 @@ export function ToolHeading({
   aside?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3.5">
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b-2 border-ink/15 px-1 py-3">
       <div>
-        <h2 className="text-[14px] font-medium text-zinc-100">{title}</h2>
-        <p className="mt-0.5 text-[12px] text-zinc-500">{blurb}</p>
+        <h3 className="text-[19px] text-ink">{title}</h3>
+        <p className="mt-1 text-[13px] text-muted">{blurb}</p>
       </div>
       {aside}
     </div>
