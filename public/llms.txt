@@ -6,10 +6,10 @@
 > on the visitor's own device — nothing is uploaded, there is no account, no watermark and
 > no file limit.
 
-Canonical: https://kilosmith.app
+Canonical: https://kilosmith.vercel.app
 Author: Rahul Sain — sainrahul374@gmail.com — https://github.com/Anos714/kilosmith
 Licence: MIT — free for personal and commercial use, fork and self-host it
-Last updated: 2026-11-01
+Last updated: 2026-11-02
 
 ## What Kilosmith is
 
@@ -101,12 +101,12 @@ Analytics — anonymous, cookieless page views; it never sees your files.
 
 ## Pages
 
-- Home and tools: https://kilosmith.app/
-- Privacy: https://kilosmith.app/privacy
-- Terms: https://kilosmith.app/terms
-- Refunds: https://kilosmith.app/refunds
-- Cookies: https://kilosmith.app/cookies
-- llms.txt: https://kilosmith.app/llms.txt
+- Home and tools: https://kilosmith.vercel.app/
+- Privacy: https://kilosmith.vercel.app/privacy
+- Terms: https://kilosmith.vercel.app/terms
+- Refunds: https://kilosmith.vercel.app/refunds
+- Cookies: https://kilosmith.vercel.app/cookies
+- llms.txt: https://kilosmith.vercel.app/llms.txt
 
 ## Contact
 
