@@ -187,7 +187,7 @@ so `bun run vendor:avif` can refresh the copy from upstream.
 
 ## SEO / GEO
 
-- `metadata` in `src/app/layout.tsx`: canonical `https://kilosmith.app`, Open Graph, Twitter card,
+- `metadata` in `src/app/layout.tsx`: canonical `https://kilosmith.vercel.app`, Open Graph, Twitter card,
   keywords, author, and an explicit `icons` set.
 - Static assets: `public/og.png` (1200×630), `src/app/favicon.ico`, `src/app/icon.svg`,
   `src/app/apple-icon.png`, `public/icon-192.png`, `public/icon-512.png`.
@@ -244,9 +244,10 @@ someone picks AVIF.
 ## Deployment
 
 The repo is connected to **Vercel**: every push to `main` builds and deploys automatically.
-Live at **[kilosmith.vercel.app](https://kilosmith.vercel.app)** (custom domain `kilosmith.app`
-attaches by adding it under the project's Domains — metadata and canonical URLs already point
-there). One-time setup if you fork it:
+Live at **[kilosmith.vercel.app](https://kilosmith.vercel.app)**. If you later attach the custom
+domain `kilosmith.app`, add it under the project's Domains and point `site.domain` in
+`src/lib/site.ts` back to it — canonical, sitemap, Open Graph and JSON-LD all read from that one
+value. One-time setup if you fork it:
 
 ```bash
 npx vercel link --yes --project <your-name>

@@ -153,7 +153,7 @@ const html = `<!doctype html>
   <div class="figure"><div class="n">0</div><div class="u">bytes uploaded.<br>Not one. Ever.</div></div>
   <div class="foot">
     <span>Resize · Crop · Compress · Convert · Video · GIF · Meme · Favicon</span>
-    <b>kilosmith.app</b>
+    <b>kilosmith.vercel.app</b>
   </div>
 </body></html>`;
 

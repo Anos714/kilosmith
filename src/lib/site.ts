@@ -1,6 +1,6 @@
 export const site = {
   name: "Kilosmith",
-  domain: "https://kilosmith.app",
+  domain: "https://kilosmith.vercel.app",
   tagline: "Heavy files, made light.",
   description:
     "Kilosmith is a free, offline image and video toolkit. Resize, crop and compress photos, convert PNG, JPEG, WebP and AVIF, trim and compress video, make GIFs, memes and favicons, all in your browser. Nothing is uploaded.",
