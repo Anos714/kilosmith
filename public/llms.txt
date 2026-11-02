@@ -65,15 +65,21 @@ decoded from the nearest keyframe, frames outside the trim range are dropped, ti
 are shifted, and the audio buffer is sliced to match. No ffmpeg.wasm, no upload, no server.
 
 ### GIF
-Turn a sequence of stills into a looping GIF with a per-frame delay, a width cap and a
-palette size of 64, 128 or 256 colours. Frames can be reordered.
+Turn a sequence of stills — or drop in a short video and let Kilosmith pull the frames — into a
+looping GIF. Every frame keeps its own delay, and you control playback speed (0.25×–4×), loop
+count (once or forever), fit mode (cover, contain, stretch) and order (reverse, duplicate).
+Frames can be reordered by hand, capped at 400, and exported as a ZIP of stills as well as the
+final GIF. Palette size of 64, 128 or 256 colours, with a width cap for the finished file.
 
 ### Meme
-200 built-in templates shipped with the app, or drop your own photo. Up to six captions,
-each independently draggable with its own font, case, fill, outline and auto-fit size; the
-renderer is shared by the preview and the full-resolution export. Search and tag filters
-find a template fast. Exports PNG or JPG, or copies to the clipboard. Template images are
-credited to Imgflip and their owners; rights stay with them.
+200 built-in templates shipped with the app, or drop your own photo. Up to six captions, each
+independently draggable with its own font (six families), case, fill, outline, tilt, per-line
+highlight and drop shadow, plus auto-fit sizing. Draw on top with pen, translucent marker, box
+or arrow tools — colour and 2–40px width — and drop up to 32 emoji stickers anywhere on the
+image. Every edit is undoable (buttons or Cmd/Ctrl+Z), and the renderer is shared by the
+preview and the full-resolution export. Search and tag filters find a template fast. Exports
+PNG, JPG or WebP, or copies to the clipboard. Template images are credited to Imgflip and
+their owners; rights stay with them.
 
 ### Favicon
 Drop a square logo and get `favicon.ico` (16/32/48), `apple-touch-icon.png`, PNG icons for
