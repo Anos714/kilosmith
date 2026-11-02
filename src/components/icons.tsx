@@ -141,6 +141,24 @@ export function IconCopy(props: IconProps) {
   );
 }
 
+export function IconUndo(props: IconProps) {
+  return (
+    <svg {...base(props)} aria-hidden="true">
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
+    </svg>
+  );
+}
+
+export function IconRedo(props: IconProps) {
+  return (
+    <svg {...base(props)} aria-hidden="true">
+      <path d="m15 14 5-5-5-5" />
+      <path d="M20 9H10a6 6 0 0 0 0 12h3" />
+    </svg>
+  );
+}
+
 export function IconCheck(props: IconProps) {
   return (
     <svg {...base(props)} aria-hidden="true">
