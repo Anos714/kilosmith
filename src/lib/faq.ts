@@ -42,7 +42,7 @@ export const faq = [
   {
     question: "Where do the meme templates come from?",
     answer:
-      "The 200 templates are fetched once from Imgflip's public catalogue, re-encoded to WebP and shipped with the app, so they load from this site and work offline. Rights stay with each image's owner. See the credits file. Dropping your own photo uses the same editor and never leaves your device.",
+      "The 200 templates are fetched once from Imgflip's public catalogue, re-encoded to WebP and shipped with the app, so they load from this site and work offline. Rights stay with each image's owner. See the credits file. Dropping your own photo uses the same editor — captions, drawing tools, emoji stickers and full undo/redo — and never leaves your device.",
   },
   {
     question: "Why do some HEIC files fail to open?",

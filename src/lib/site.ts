@@ -38,7 +38,7 @@ export const site = {
     { label: "Buy Me a Coffee", href: "https://buymeacoffee.com/anos714", handle: "@anos714" },
   ],
   released: "2026-10-30",
-  updated: "2026-11-01",
+  updated: "2026-11-02",
   year: 2026,
 } as const;
 
@@ -86,7 +86,7 @@ export const tools = [
   {
     id: "gif",
     name: "GIF",
-    blurb: "Turn a handful of stills into a looping GIF with its own palette.",
+    blurb: "Stills or video → a looping GIF with per-frame timing and speed control.",
     icon: "gif",
     color: "bg-bubble",
     doodle: "make it wobble",
@@ -94,7 +94,7 @@ export const tools = [
   {
     id: "meme",
     name: "Meme",
-    blurb: "200 ready templates, draggable captions, custom font and outline.",
+    blurb: "200 templates, captions, drawing tools and emoji stickers — with undo.",
     icon: "meme",
     color: "bg-butter",
     doodle: "go on, be unreasonable",

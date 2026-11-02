@@ -54,8 +54,8 @@ cookieless page-view beacon (Vercel Web Analytics).
 | **Compress** | Quality slider, max edge, optional target size in KB (binary-searched encoder quality), live before/after. |
 | **Convert** | Batch JPEG / PNG / WebP / AVIF. Alpha preserved where the format supports it; JPEG and AVIF composite on white. |
 | **Video** | MP4/MOV re-encode with WebCodecs: trim in/out, quality → bitrate, resolution cap, audio on/off (AAC with an Opus fallback, so the soundtrack survives), live progress, MP4 out. |
-| **GIF** | Still sequence → looping GIF with per-frame delay, width cap and 64/128/256-colour palette. |
-| **Meme** | 200 built-in templates or your own photo, up to six draggable captions, per-caption font/case/fill/outline, auto-fit sizing, PNG/JPG export and copy to clipboard. |
+| **GIF** | Stills *or a video* → looping GIF. Per-frame timing, speed (0.25–4×), loop count, fit mode, reverse/duplicate frames, 64/128/256-colour palette, width cap, and a ZIP of every extracted frame. |
+| **Meme** | 200 built-in templates or your own photo. Six draggable captions with tilt, highlight, drop shadow and six fonts; pen/marker/box/arrow drawing; 32 emoji stickers; full undo/redo; PNG/JPG/WebP export and copy to clipboard. |
 | **Favicon** | `.ico` (16/32/48), `apple-touch-icon.png`, Android PNGs, `manifest.webmanifest` and the `<head>` snippet. |
 
 ### Why it exists
@@ -103,7 +103,7 @@ That script needs `sharp` and a local Chrome (auto-detected from `~/.cache/puppe
 - Encoding: the browser's own `toBlob`, plus Squoosh's AVIF encoder (WASM) served from `/public/vendor/avif`
   because no browser encodes AVIF from a canvas
 - Video: **WebCodecs** (`VideoDecoder` → canvas → `VideoEncoder`) + **mp4-muxer**, demuxed with **mp4box**
-- GIF: **gifenc** (quantise + apply palette + LZW)
+- GIF: **gifenc** (quantise + apply palette + LZW); frames pulled from video with `<video>` seek + canvas (`src/lib/video-frames.ts`)
 - Meme templates: 200 WebP images in `public/memes` (built once by `scripts/fetch_memes.py`)
 - Packaging: **fflate** in store mode — images are already compressed, so deflating them only wastes seconds
 
@@ -141,15 +141,24 @@ Click **crop** on any image to drop a focal point manually — every size re-cro
 
 ## How the meme tool works
 
-`src/lib/meme.ts` is a pure renderer: given a canvas context, the image and a list of caption
-boxes, it draws the meme and returns the bounding box of each caption. The preview and the
-full-resolution export call the same function, so what you see is what you download.
+`src/lib/meme.ts` is a pure renderer: given a canvas context, the image and a document of
+captions, strokes and stickers, it draws the meme and returns the bounding box of every mark.
+The preview and the full-resolution export call the same function, so what you see is what you
+download.
 
-- Captions are objects (`text`, `x`, `y`, anchor, font, size, fill, outline). Dragging on the canvas
-  hit-tests those returned boxes and writes new `x`/`y`, clamped so a block can never be dragged off
-  the edge. Anchors (`top`/`middle`/`bottom`) decide which edge stays put as the text re-wraps.
-- Auto size binary-searches the largest font size whose wrapped block still fits 92% of the width in
-  at most three lines. Manual mode hands the slider straight to the renderer.
+- Captions are objects (`text`, `x`, `y`, anchor, font, size, fill, outline, tilt, highlight,
+  shadow). Dragging on the canvas hit-tests those returned boxes and writes new `x`/`y`, clamped
+  so a block can never be dragged off the edge. Anchors (`top`/`middle`/`bottom`) decide which
+  edge stays put as the text re-wraps. Rects come back bottom-to-top (strokes → captions →
+  stickers), so a reversed scan always finds whatever sits visually on top.
+- Auto size binary-searches the largest font size whose wrapped block still fits 92% of the width
+  in at most three lines. Manual mode hands the slider straight to the renderer.
+- Strokes (`pen`/`marker`/`box`/`arrow`) store normalised point lists plus a canvas-pixel width,
+  so the preview and export match exactly; the marker paints at 0.35 alpha with a 2.6× width.
+- History lives in refs, not state: a snapshot is taken at pointerdown and committed once at
+  pointerup (one drag = one undo step), rapid edits of the same field within 1.5s coalesce, and a
+  click that made no mark is discarded instead of leaving a junk entry. Only the undo/redo
+  availability is mirrored into state, since the panel must re-render when it flips.
 - Templates are local WebP files; `src/lib/memes.generated.ts` holds names, dimensions and the
   number of caption slots each format expects, so "Two Buttons" opens with three boxes.
 
@@ -260,6 +269,7 @@ npx vercel deploy --prod --yes
 public/resize.worker.js        worker: decode → saliency → render → encode
 src/lib/image.ts               format table, encode helpers, target-size search, AVIF WASM bridge
 src/lib/video.ts               WebCodecs compress pipeline (AAC with Opus fallback)
+src/lib/video-frames.ts        pulls frames out of a video for the GIF maker (seek + canvas)
 src/lib/presets.ts             the whole preset table (add a platform = one line)
 src/lib/faq.ts                 FAQ copy, shared by the page and the JSON-LD
 src/lib/site.ts                brand, author, social links, tool metadata
