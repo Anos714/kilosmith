@@ -15,16 +15,36 @@ import {
   Spinner,
   StatusTag,
 } from "@/components/ui";
-import { IconArrow, IconClose, IconDownload } from "@/components/icons";
-import { decodeImage, canvasOf } from "@/lib/image";
-import { formatBytes } from "@/lib/format";
-import { saveBlob } from "@/lib/zip";
+import { IconArrow, IconClose, IconCopy, IconDownload } from "@/components/icons";
+import { decodeImage, canvasOf, extensionFor } from "@/lib/image";
+import { formatBytes, slug } from "@/lib/format";
+import { makeZip, saveBlob, zipName } from "@/lib/zip";
+import { GRAB_FRAME_CAP, grabVideoFrames, probeClip } from "@/lib/video-frames";
 
-type Frame = { id: string; file: File; name: string; url: string };
+type Frame = { id: string; file: Blob; name: string; url: string; delay?: number };
 type Output = { url: string; size: number };
+type VideoJob = {
+  file: File;
+  name: string;
+  duration: number;
+  start: number;
+  end: number;
+  fps: string;
+};
 
 const MIN_DELAY = 30;
 const MAX_DELAY = 600;
+const MIN_FRAME_DELAY = 30;
+const MAX_FRAME_DELAY = 2000;
+const GRAB_FPS = ["6", "10", "12", "15", "20"];
+const SPEEDS = ["0.25", "0.5", "1", "2", "4"];
+const SPEED_LABELS: Record<string, string> = {
+  "0.25": "¼×",
+  "0.5": "½×",
+  "1": "1×",
+  "2": "2×",
+  "4": "4×",
+};
 
 /** The controls hand back strings; never let a NaN reach the canvas or the encoder. */
 function toNumber(value: string | number, fallback: number, min: number, max: number) {
@@ -36,17 +56,29 @@ function toNumber(value: string | number, fallback: number, min: number, max: nu
 export default function GifTool() {
   const [frames, setFrames] = useState<Frame[]>([]);
   const [delay, setDelay] = useState(120);
+  const [speed, setSpeed] = useState("1");
+  const [loop, setLoop] = useState("0");
+  const [fit, setFit] = useState("cover");
   const [width, setWidth] = useState("480");
   const [colors, setColors] = useState("256");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [video, setVideo] = useState<VideoJob | null>(null);
+  const [grabbing, setGrabbing] = useState(false);
+  const [grabDone, setGrabDone] = useState(0);
+  const [grabTotal, setGrabTotal] = useState(0);
+  const [zipping, setZipping] = useState(false);
   const [building, setBuilding] = useState(false);
   const [done, setDone] = useState(0);
   const [result, setResult] = useState<Output | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const runId = useRef(0);
+  const grabId = useRef(0);
+  const probeId = useRef(0);
   const outputRef = useRef<Output | null>(null);
   const framesRef = useRef<Frame[]>([]);
   const addInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     framesRef.current = frames;
@@ -68,6 +100,15 @@ export default function GifTool() {
     setResult(next);
   }
 
+  /** What this frame plays for: its own delay (or the base), scaled by speed. */
+  function effectiveDelay(frame: Frame) {
+    const base = frame.delay ?? toNumber(delay, 120, MIN_DELAY, MAX_DELAY);
+    const rate = Number(speed);
+    const scale = Number.isFinite(rate) && rate > 0 ? rate : 1;
+    // The GIF spec stores delays in 10ms ticks; browsers read <20ms as 100ms.
+    return Math.min(10_000, Math.max(20, Math.round(base / scale)));
+  }
+
   async function build(list: Frame[]) {
     if (!list.length) return;
 
@@ -83,7 +124,8 @@ export default function GifTool() {
     try {
       const maxWidth = toNumber(width, 480, 16, 1200);
       const limit = toNumber(colors, 256, 2, 256);
-      const frameDelay = toNumber(delay, 120, MIN_DELAY, MAX_DELAY);
+      const repeat = toNumber(loop, 0, -1, 100);
+      const mode = fit === "contain" || fit === "stretch" ? fit : "cover";
       const gif = GIFEncoder();
 
       let targetW = 0;
@@ -103,10 +145,17 @@ export default function GifTool() {
           const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
           ctx.fillStyle = "#000000";
           ctx.fillRect(0, 0, targetW, targetH);
-          const scale = Math.max(targetW / bitmap.width, targetH / bitmap.height);
-          const dw = bitmap.width * scale;
-          const dh = bitmap.height * scale;
-          ctx.drawImage(bitmap, (targetW - dw) / 2, (targetH - dh) / 2, dw, dh);
+          if (mode === "stretch") {
+            ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+          } else {
+            const scale =
+              mode === "contain"
+                ? Math.min(targetW / bitmap.width, targetH / bitmap.height)
+                : Math.max(targetW / bitmap.width, targetH / bitmap.height);
+            const dw = bitmap.width * scale;
+            const dh = bitmap.height * scale;
+            ctx.drawImage(bitmap, (targetW - dw) / 2, (targetH - dh) / 2, dw, dh);
+          }
 
           if (!fresh()) return;
 
@@ -115,8 +164,8 @@ export default function GifTool() {
           const indexed = applyPalette(data, palette);
           gif.writeFrame(indexed, targetW, targetH, {
             palette,
-            delay: frameDelay,
-            repeat: 0,
+            delay: effectiveDelay(frame),
+            repeat,
             first: index === 0,
           });
 
@@ -148,19 +197,109 @@ export default function GifTool() {
     const timer = window.setTimeout(() => void build(frames), 260);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frames, delay, width, colors]);
+  }, [frames, delay, speed, loop, fit, width, colors]);
 
   function add(files: File[]) {
-    const next = files
-      .filter((file) => file.type.startsWith("image/"))
-      .map((file) => ({
-        id: crypto.randomUUID(),
+    const images: File[] = [];
+    for (const file of files) {
+      if (file.type.startsWith("video/")) void openVideo(file);
+      else if (file.type.startsWith("image/")) images.push(file);
+    }
+    if (!images.length) return;
+    const next = images.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      name: file.name,
+      url: URL.createObjectURL(file),
+    }));
+    setFrames((previous) => [...previous, ...next]);
+  }
+
+  /** Swap in a fresh clip and retire any grab or probe still in flight. */
+  async function openVideo(file: File) {
+    probeId.current += 1;
+    grabId.current += 1;
+    setGrabbing(false);
+    setError(null);
+    const run = probeId.current;
+    try {
+      const clip = await probeClip(file);
+      if (run !== probeId.current) return;
+      setVideo({
         file,
         name: file.name,
-        url: URL.createObjectURL(file),
-      }));
-    if (!next.length) return;
-    setFrames((previous) => [...previous, ...next]);
+        duration: clip.duration,
+        start: 0,
+        end: Math.max(0.1, Math.min(clip.duration, 10)),
+        fps: "12",
+      });
+    } catch (err) {
+      if (run === probeId.current) {
+        setError(err instanceof Error ? err.message : "That video could not be opened");
+      }
+    }
+  }
+
+  function closeVideo() {
+    probeId.current += 1;
+    grabId.current += 1;
+    setGrabbing(false);
+    setVideo(null);
+  }
+
+  async function grab() {
+    const job = video;
+    if (!job || grabbing) return;
+
+    const fps = toNumber(job.fps, 12, 1, 60);
+    const wanted = Math.min(
+      GRAB_FRAME_CAP,
+      Math.max(1, Math.ceil((job.end - job.start) * fps))
+    );
+
+    grabId.current += 1;
+    const run = grabId.current;
+    const fresh = () => run === grabId.current;
+
+    setGrabbing(true);
+    setGrabDone(0);
+    setGrabTotal(wanted);
+    setError(null);
+
+    try {
+      const pulled = await grabVideoFrames(job.file, {
+        start: job.start,
+        end: job.end,
+        fps,
+        onProgress: (step, all) => {
+          if (fresh()) {
+            setGrabDone(step);
+            setGrabTotal(all);
+          }
+        },
+        cancelled: () => grabId.current !== run,
+      });
+      if (!fresh() || !pulled.length) return;
+
+      const base = slug(job.name);
+      const added: Frame[] = pulled.map((frame, index) => {
+        const name = `${base}-${String(index + 1).padStart(3, "0")}.jpg`;
+        return {
+          id: crypto.randomUUID(),
+          file: frame.blob,
+          name,
+          url: URL.createObjectURL(frame.blob),
+        };
+      });
+      setFrames((previous) => [...previous, ...added]);
+      setVideo(null);
+    } catch (err) {
+      if (fresh()) {
+        setError(err instanceof Error ? err.message : "Could not read frames from that video");
+      }
+    } finally {
+      if (fresh()) setGrabbing(false);
+    }
   }
 
   function remove(id: string) {
@@ -169,6 +308,7 @@ export default function GifTool() {
 
     const next = frames.filter((entry) => entry.id !== id);
     setFrames(next);
+    if (selected === id) setSelected(null);
 
     if (!next.length) {
       // Retire any build in flight, then clear the GIF it may still be holding.
@@ -190,6 +330,33 @@ export default function GifTool() {
     });
   }
 
+  function duplicate(id: string) {
+    setFrames((previous) => {
+      const index = previous.findIndex((entry) => entry.id === id);
+      if (index < 0) return previous;
+      const source = previous[index];
+      // A fresh URL: the copy plays on its own, so revoking either is safe.
+      const copy: Frame = {
+        ...source,
+        id: crypto.randomUUID(),
+        url: URL.createObjectURL(source.file),
+      };
+      const next = [...previous];
+      next.splice(index + 1, 0, copy);
+      return next;
+    });
+  }
+
+  function reverse() {
+    setFrames((previous) => [...previous].reverse());
+  }
+
+  function setFrameDelay(id: string, value?: number) {
+    setFrames((previous) =>
+      previous.map((entry) => (entry.id === id ? { ...entry, delay: value } : entry))
+    );
+  }
+
   async function download() {
     if (!result) return;
     try {
@@ -201,20 +368,136 @@ export default function GifTool() {
     }
   }
 
+  /** Every original still, in play order, as a ZIP. */
+  async function downloadFrames() {
+    if (!frames.length || zipping) return;
+    setZipping(true);
+    try {
+      const files: Record<string, Uint8Array> = {};
+      const used = new Set<string>();
+      for (let index = 0; index < frames.length; index++) {
+        const frame = frames[index];
+        const dot = frame.name.lastIndexOf(".");
+        const ext = dot > 0 ? frame.name.slice(dot) : `.${extensionFor(frame.file)}`;
+        files[zipName(used, `frame-${String(index + 1).padStart(3, "0")}${ext}`)] =
+          new Uint8Array(await frame.file.arrayBuffer());
+      }
+      saveBlob(await makeZip(files), "kilosmith-frames.zip");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The ZIP could not be built");
+    } finally {
+      setZipping(false);
+    }
+  }
+
   const total = frames.length;
   const pct = result && !building ? 100 : total ? Math.round((done / total) * 100) : 0;
+  const loopMs = frames.reduce((sum, frame) => sum + effectiveDelay(frame), 0);
+  const selectedIndex = selected ? frames.findIndex((entry) => entry.id === selected) : -1;
+  const selectedFrame = selectedIndex >= 0 ? frames[selectedIndex] : null;
+  const grabWanted = video
+    ? Math.min(
+        GRAB_FRAME_CAP,
+        Math.max(1, Math.ceil((video.end - video.start) * toNumber(video.fps, 12, 1, 60)))
+      )
+    : 0;
+
+  const videoCard = video ? (
+    <div className="tile p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate font-[family-name:var(--font-display)] text-[13.5px] font-semibold text-ink">
+          {video.name}
+        </p>
+        <IconButton
+          onClick={closeVideo}
+          label="Discard this video"
+          className="size-6 shrink-0 bg-coral"
+          disabled={grabbing}
+        >
+          <IconClose size={9} />
+        </IconButton>
+      </div>
+
+      <div className="mt-3 grid gap-x-4 gap-y-1 sm:grid-cols-2">
+        <Slider
+          label="From"
+          min={0}
+          max={Math.max(0.1, video.duration)}
+          step={0.1}
+          value={video.start}
+          display={`${video.start.toFixed(1)}s`}
+          onChange={(value) =>
+            setVideo((previous) =>
+              previous ? { ...previous, start: Math.min(value, previous.end - 0.1) } : previous
+            )
+          }
+        />
+        <Slider
+          label="To"
+          min={0}
+          max={Math.max(0.1, video.duration)}
+          step={0.1}
+          value={video.end}
+          display={`${video.end.toFixed(1)}s`}
+          onChange={(value) =>
+            setVideo((previous) =>
+              previous ? { ...previous, end: Math.max(value, previous.start + 0.1) } : previous
+            )
+          }
+        />
+      </div>
+
+      <div className="mt-3">
+        <Field
+          label="Frame rate"
+          hint={`${grabWanted} frames will be pulled — the cap is ${GRAB_FRAME_CAP}.`}
+        >
+          <Segmented
+            options={GRAB_FPS.map((value) => ({ value, label: value }))}
+            value={video.fps}
+            onChange={(value) =>
+              setVideo((previous) => (previous ? { ...previous, fps: value } : previous))
+            }
+          />
+        </Field>
+      </div>
+
+      <Button className="mt-3 w-full" onClick={grab} disabled={grabbing}>
+        {grabbing ? (
+          <>
+            <Spinner /> grabbing {grabDone}/{grabTotal}
+          </>
+        ) : (
+          <>Grab {grabWanted} frames</>
+        )}
+      </Button>
+      {grabbing && (
+        <div className="meter mt-2">
+          <div
+            className="meter-fill"
+            style={{ width: `${grabTotal ? Math.round((grabDone / grabTotal) * 100) : 0}%` }}
+          />
+        </div>
+      )}
+    </div>
+  ) : null;
 
   return (
     <div className="w-full">
       {total === 0 ? (
-        <DropZone
-          onFiles={add}
-          multiple
-          accent="bg-bubble"
-          doodle="make it wobble"
-          title="Drop the stills for your GIF"
-          hint="Two or more images, in the order you want them to play. Decoding happens in this tab — nothing is uploaded."
-        />
+        <div className="space-y-4">
+          {videoCard}
+          <DropZone
+            onFiles={add}
+            multiple
+            accept="image/*,video/*"
+            accent="bg-bubble"
+            doodle="make it wobble"
+            title="Drop stills — or a whole video"
+            hint="Two or more images in play order, or a video and the tool pulls its frames out. Decoding happens in this tab — nothing is uploaded."
+          />
+          {error && <p className="text-[13px] leading-snug text-error">{error}</p>}
+        </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-[268px_minmax(0,1fr)]">
           <Panel className="order-2 self-start p-4 md:order-1 md:sticky md:top-20">
@@ -224,7 +507,7 @@ export default function GifTool() {
 
             <div className="mt-3">
               <Slider
-                label="Frame delay"
+                label="Base delay"
                 min={MIN_DELAY}
                 max={MAX_DELAY}
                 step={10}
@@ -232,6 +515,16 @@ export default function GifTool() {
                 display={`${delay}ms`}
                 onChange={setDelay}
               />
+            </div>
+
+            <div className="mt-4">
+              <Field label="Speed" hint="Scales every delay — 2× plays the GIF twice as fast.">
+                <Segmented
+                  options={SPEEDS.map((value) => ({ value, label: SPEED_LABELS[value] }))}
+                  value={speed}
+                  onChange={setSpeed}
+                />
+              </Field>
             </div>
 
             <div className="mt-4">
@@ -263,6 +556,66 @@ export default function GifTool() {
               </Field>
             </div>
 
+            <div className="mt-4">
+              <Field
+                label="Fit"
+                hint="Fill crops to the box, Fit letterboxes on black, Stretch ignores the ratio."
+              >
+                <Segmented
+                  options={[
+                    { value: "cover", label: "Fill" },
+                    { value: "contain", label: "Fit" },
+                    { value: "stretch", label: "Stretch" },
+                  ]}
+                  value={fit}
+                  onChange={setFit}
+                />
+              </Field>
+            </div>
+
+            <div className="mt-4">
+              <Field label="Loop" hint="Forever, three times over, or play once and stop.">
+                <Segmented
+                  options={[
+                    { value: "0", label: "Forever" },
+                    { value: "3", label: "3×" },
+                    { value: "-1", label: "Once" },
+                  ]}
+                  value={loop}
+                  onChange={setLoop}
+                />
+              </Field>
+            </div>
+
+            {selectedFrame && (
+              <div className="mt-4 hairline pt-4">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <p className="font-[family-name:var(--font-display)] text-[14px] font-medium text-ink-2">
+                    Frame {selectedIndex + 1} timing
+                  </p>
+                  <MiniButton
+                    title="Give this frame back the base delay"
+                    disabled={selectedFrame.delay === undefined}
+                    onClick={() => setFrameDelay(selectedFrame.id)}
+                  >
+                    use base
+                  </MiniButton>
+                </div>
+                <Slider
+                  label="Delay"
+                  min={MIN_FRAME_DELAY}
+                  max={MAX_FRAME_DELAY}
+                  step={10}
+                  value={selectedFrame.delay ?? delay}
+                  display={`${selectedFrame.delay ?? delay}ms`}
+                  onChange={(value) => setFrameDelay(selectedFrame.id, value)}
+                />
+                <p className="mt-2 text-[12px] leading-relaxed text-muted">
+                  This frame only — the rest follow the base delay. Speed still scales everything.
+                </p>
+              </div>
+            )}
+
             <div className="mt-5 hairline pt-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="font-[family-name:var(--font-display)] text-[12.5px] text-ink-2 tabular-nums">
@@ -289,6 +642,8 @@ export default function GifTool() {
           </Panel>
 
           <div className="order-1 min-w-0 space-y-3 md:order-2">
+            {videoCard}
+
             <div className="tile">
               <div className="bg-checker flex min-h-[280px] items-center justify-center p-3">
                 {result ? (
@@ -309,7 +664,7 @@ export default function GifTool() {
               </div>
               <div className="tile-foot">
                 <span>
-                  {width}px · {colors} colors · {delay}ms per frame
+                  {width}px · {colors} colors · {(loopMs / 1000).toFixed(1)}s loop
                 </span>
                 <span className="tabular-nums">{result ? formatBytes(result.size) : "…"}</span>
               </div>
@@ -318,19 +673,61 @@ export default function GifTool() {
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-paper-2 px-2.5 py-2">
               <p className="font-[family-name:var(--font-display)] text-[13px] text-ink-2">
                 <span className="text-ink tabular-nums">{total}</span> stills ·{" "}
-                <span className="tabular-nums">{((total * delay) / 1000).toFixed(1)}s</span> per loop
+                <span className="tabular-nums">{(loopMs / 1000).toFixed(1)}s</span> per loop
               </p>
-              <MiniButton onClick={() => addInputRef.current?.click()}>+ add stills</MiniButton>
+              <div className="flex flex-wrap gap-1.5">
+                <MiniButton
+                  onClick={reverse}
+                  disabled={total < 2}
+                  title="Play the frames backwards"
+                >
+                  reverse
+                </MiniButton>
+                <MiniButton
+                  onClick={() => videoInputRef.current?.click()}
+                  title="Pull frames out of a video"
+                >
+                  + video
+                </MiniButton>
+                <MiniButton
+                  onClick={downloadFrames}
+                  disabled={zipping}
+                  title="Download every original still as a ZIP"
+                >
+                  {zipping ? "zipping…" : "frames → zip"}
+                </MiniButton>
+                <MiniButton onClick={() => addInputRef.current?.click()}>+ add stills</MiniButton>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
               {frames.map((frame, index) => (
                 <div key={frame.id} className="tile wiggle" title={frame.name}>
-                  <div className="bg-checker relative" style={{ height: 78 }}>
+                  <div
+                    className="bg-checker relative cursor-pointer"
+                    style={{ height: 78 }}
+                    onClick={(event) => {
+                      // Selecting on click, but the badge and remove button
+                      // inside keep their own jobs.
+                      if ((event.target as HTMLElement).closest("button")) return;
+                      setSelected((current) => (current === frame.id ? null : frame.id));
+                    }}
+                  >
                     <img src={frame.url} alt="" className="h-full w-full object-cover" />
-                    <span className="tag absolute left-1 top-1 bg-bubble tabular-nums">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelected((current) => (current === frame.id ? null : frame.id))
+                      }
+                      aria-pressed={selected === frame.id}
+                      aria-label={`Set the delay for frame ${index + 1}`}
+                      title="Set this frame's delay"
+                      className={`tag absolute left-1 top-1 cursor-pointer tabular-nums ${
+                        selected === frame.id ? "bg-ink text-paper" : "bg-bubble"
+                      }`}
+                    >
                       {index + 1}
-                    </span>
+                    </button>
                     <IconButton
                       onClick={() => remove(frame.id)}
                       label={`Remove ${frame.name}`}
@@ -338,6 +735,11 @@ export default function GifTool() {
                     >
                       <IconClose size={9} />
                     </IconButton>
+                    {frame.delay !== undefined && (
+                      <span className="tag absolute bottom-1 right-1 bg-butter tabular-nums">
+                        {effectiveDelay(frame)}ms
+                      </span>
+                    )}
                   </div>
                   <div className="tile-foot justify-center">
                     <IconButton
@@ -347,6 +749,13 @@ export default function GifTool() {
                       className="size-6"
                     >
                       <IconArrow size={10} className="rotate-180" />
+                    </IconButton>
+                    <IconButton
+                      onClick={() => duplicate(frame.id)}
+                      label={`Duplicate ${frame.name}`}
+                      className="size-6"
+                    >
+                      <IconCopy size={10} />
                     </IconButton>
                     <IconButton
                       onClick={() => move(frame.id, 1)}
@@ -372,6 +781,17 @@ export default function GifTool() {
         className="hidden"
         onChange={(event) => {
           add(Array.from(event.target.files ?? []));
+          event.target.value = "";
+        }}
+      />
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={(event) => {
+          const file = Array.from(event.target.files ?? [])[0];
+          if (file) void openVideo(file);
           event.target.value = "";
         }}
       />
